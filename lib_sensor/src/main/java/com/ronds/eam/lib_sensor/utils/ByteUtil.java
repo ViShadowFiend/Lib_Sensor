@@ -280,22 +280,26 @@ public class ByteUtil {
    * 累加和校验，并取反
    */
   public static byte makeCheckSum(byte[] data) {
-
     int total = 0;
-    int len = data.length;
-    for (int i = 0; i < len; i++) {
-      int item = data[i] & 0xff;
-      total = total + item;
+    for (byte e : data) {
+      total += e & 0xFF;
     }
-
-    //用256求余最大是255，即16进制的FF
-    int mod = total % 256;
-    mod = 256 - mod;
-    if (mod == 0) {
-      return (byte) 0xff;
-    } else {
-      return (byte) mod;
-    }
+    return (byte) (0x100 - total % 0x100);
+    //int total = 0;
+    //int len = data.length;
+    //for (int i = 0; i < len; i++) {
+    //  int item = data[i] & 0xff;
+    //  total = total + item;
+    //}
+    //
+    ////用256求余最大是255，即16进制的FF
+    //int mod = total % 256;
+    //mod = 256 - mod;
+    //if (mod == 0) {
+    //  return (byte) 0xff;
+    //} else {
+    //  return (byte) mod;
+    //}
   }
 
   /**
