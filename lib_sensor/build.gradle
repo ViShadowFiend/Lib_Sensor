@@ -35,8 +35,7 @@ android {
 
   sourceSets {
     main {
-      jniLibs.srcDir 'libs'
-      jni.srcDirs = [] //disable automatic ndk-build
+      jniLibs.srcDirs = ['libs']
     }
   }
 
@@ -55,6 +54,5 @@ buildscript {
 
 dependencies {
   implementation fileTree(dir: 'libs', include: ['*.jar'])
-  implementation files('libs/')
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 }
