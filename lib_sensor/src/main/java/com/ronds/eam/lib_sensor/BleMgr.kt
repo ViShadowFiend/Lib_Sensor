@@ -127,7 +127,7 @@ object BleMgr {
 
   fun scan(scanCallback: ScanCallback?) {
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       mainHandler.post {
         scanCallback?.onScanStart()
@@ -185,7 +185,7 @@ object BleMgr {
 
   fun disConnectAllDevices(disconnectCallback: DisconnectCallback?) {
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       mainHandler.post { disconnectCallback?.onDisconnectStart() }
       doSleep(1000)
@@ -522,7 +522,7 @@ object BleMgr {
     }
 
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       notify { data ->
         dTag("notify_set_sample_params", data)
@@ -588,7 +588,7 @@ object BleMgr {
     val isTimeout = AtomicBoolean(false)
     isTempProcessing.set(false)
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       doSleep(200)
       notify { data ->
@@ -866,7 +866,7 @@ object BleMgr {
     val isTimeout = AtomicBoolean(false)
     val isReceived = AtomicBoolean(false)
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       doSleep(200)
       notify { data ->
@@ -982,7 +982,7 @@ object BleMgr {
     val isReceived = AtomicBoolean(false)
     val isTimeout = AtomicBoolean(false)
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       doSleep(200)
       notify { data ->
@@ -1028,7 +1028,7 @@ object BleMgr {
     val isReceived = AtomicBoolean(false)
     val isTimeout = AtomicBoolean(false)
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       doSleep(200)
       notify { data ->
@@ -1072,7 +1072,7 @@ object BleMgr {
     val isReceived = AtomicBoolean(false)
     val isTimeout = AtomicBoolean(false)
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       notify { data ->
         isReceived.set(true)
@@ -1120,7 +1120,7 @@ object BleMgr {
     val isReceived = AtomicBoolean(false)
     val isTimeout = AtomicBoolean(false)
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       doSleep(200)
       notify { data ->
@@ -1162,7 +1162,7 @@ object BleMgr {
     val isReceived = AtomicBoolean(false)
     val isTimeout = AtomicBoolean(false)
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       doSleep(200)
       notify { data ->
@@ -1322,7 +1322,7 @@ object BleMgr {
     }
 
     curFuture?.cancel(true)
-    mainHandler.removeCallbacks(null)
+    mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       notify { data ->
         dTag("notify_prepare_upgrade", data?.toString())
@@ -1556,7 +1556,7 @@ object BleMgr {
 
   private fun d(exception: java.lang.Exception?) {
     if (isDebug && exception != null) {
-      Log.d(TAG, exception.message)
+      Log.d(TAG, exception.message ?: "")
     }
   }
 }
