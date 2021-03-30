@@ -20,17 +20,10 @@ import com.clj.fastble.scan.BleScanRuleConfig
 import com.ronds.eam.lib_sensor.consts.UUID_DOWN
 import com.ronds.eam.lib_sensor.consts.UUID_SERVICE
 import com.ronds.eam.lib_sensor.consts.UUID_UP
-import com.ronds.eam.lib_sensor.utils.ByteUtil
-import java.math.BigDecimal
-import java.text.SimpleDateFormat
-import java.util.Arrays
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.experimental.or
 
@@ -80,18 +73,18 @@ abstract class ABleMgr {
     }
   }
 
-  fun scan(scanCallback: BleInterfaces.ScanCallback?) {
+  fun scan(scanCallback: ScanCallback) {
     curFuture?.cancel(true)
     mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       mainHandler.post {
-        scanCallback?.onScanStart()
+        scanCallback.onScanStart()
       }
       doSleep(1000)
       BleManager.getInstance().scan(object : BleScanCallback() {
         override fun onScanFinished(scanResultList: MutableList<BleDevice>?) {
           isScanning = false
-          mainHandler.post { scanCallback?.onScanEnd() }
+          mainHandler.post { scanCallback.onScanEnd() }
         }
 
         override fun onScanStarted(success: Boolean) {
@@ -99,13 +92,18 @@ abstract class ABleMgr {
           bleDevices.clear()
           val connectedDevices = getAllConnectDevices()
           bleDevices.addAll(connectedDevices)
-          mainHandler.post { scanCallback?.onScanResult(bleDevices) }
+          mainHandler.post { scanCallback.onScanResult(bleDevices) }
         }
 
         override fun onScanning(bleDevice: BleDevice?) {
-          if (bleDevice?.name?.startsWith("RH205_", true) == true) {
-            bleDevices.add(bleDevice)
-            mainHandler.post { scanCallback?.onScanResult(bleDevices) }
+          if (
+            // bleDevice?.name?.startsWith("RH205_", true) == true
+            bleDevice?.name != null
+          ) {
+            if (bleDevices.none { it.mac == bleDevice.mac }){
+              bleDevices.add(bleDevice)
+              mainHandler.post { scanCallback.onScanResult(bleDevices) }
+            }
           }
         }
       })
@@ -138,7 +136,7 @@ abstract class ABleMgr {
     return mac != null && BleManager.getInstance().isConnected(mac)
   }
 
-  fun disConnectAllDevices(disconnectCallback: BleInterfaces.DisconnectCallback?) {
+  fun disConnectAllDevices(disconnectCallback: DisconnectCallback) {
     curFuture?.cancel(true)
     mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
@@ -150,7 +148,7 @@ abstract class ABleMgr {
     }
   }
 
-  fun disconnect(bleDevice: BleDevice?, disconnectCallback: BleInterfaces.DisconnectCallback?) {
+  fun disconnect(bleDevice: BleDevice?, disconnectCallback: DisconnectCallback) {
     singleExecutor.submit {
       mainHandler.post {
         disconnectCallback?.onDisconnectStart()
@@ -174,7 +172,7 @@ abstract class ABleMgr {
     return BleManager.getInstance().allConnectedDevice ?: mutableListOf()
   }
 
-  fun connect(bleDevice: BleDevice?, connectStatusCallback: BleInterfaces.ConnectStatusCallback?) {
+  fun connect(bleDevice: BleDevice?, connectStatusCallback: ConnectStatusCallback) {
     if (bleDevice == null) {
       connectStatusCallback?.onConnectFail(null, "ble 设备为空")
       return
@@ -183,26 +181,26 @@ abstract class ABleMgr {
     mainHandler.removeCallbacksAndMessages(null)
     //		disposableReconnect?.dispose()
     curFuture = singleExecutor.submit {
-      if (isConnected()) {
+      if (isConnected(bleDevice)) {
         mainHandler.post {
-          connectStatusCallback?.onConnectSuccess(curBleDevice)
+          connectStatusCallback?.onConnectSuccess(bleDevice)
         }
         return@submit
       }
       doSleep(300)
-      if (curBleDevice == null) {
-        curBleDevice = bleDevice
-      }
-      //			isReconnecting.set(false)
-      //			canReconnect.set(false)
-      BleManager.getInstance().connect(curBleDevice, object : BleGattCallback() {
+      BleManager.getInstance().connect(bleDevice, object : BleGattCallback() {
         override fun onStartConnect() {
           //					toast("正在连接")
           connectStatusCallback?.onConnectStart()
-          dTag("connect", "开始连接${curBleDevice?.mac}")
+          dTag("connect", "开始连接${bleDevice.mac}")
         }
 
-        override fun onDisConnected(isActiveDisConnected: Boolean, device: BleDevice?, gatt: BluetoothGatt?, status: Int) {
+        override fun onDisConnected(
+          isActiveDisConnected: Boolean,
+          device: BleDevice?,
+          gatt: BluetoothGatt?,
+          status: Int
+        ) {
           connectStatusCallback?.onDisconnected(device)
         }
 
@@ -211,7 +209,7 @@ abstract class ABleMgr {
           singleExecutor.execute {
             curBleDevice = bleDevice
             doSleep(200)
-            BleManager.getInstance().setMtu(curBleDevice, 250, object : BleMtuChangedCallback() {
+            BleManager.getInstance().setMtu(bleDevice, 250, object : BleMtuChangedCallback() {
               override fun onMtuChanged(mtu: Int) {
                 dTag("setMtu_success", mtu)
               }
@@ -243,12 +241,36 @@ abstract class ABleMgr {
     return networkProvider || gpsProvider
   }
 
+  /**
+   * 判断 Android 手机是否支持 ble
+   *
+   * @return true - 支持, false - 不支持
+   */
+  fun isSupportBle(): Boolean {
+    return BleManager.getInstance().isSupportBle
+  }
+
+  /**
+   * 判断蓝牙是否开启
+   *
+   * @return true - 启用, false - 关闭
+   */
+  fun isBluetoothEnabled(): Boolean {
+    return BleManager.getInstance().isBlueEnable
+  }
+
   fun onDestroy() {
     mainHandler.removeCallbacksAndMessages(null)
     BleManager.getInstance().clearCharacterCallback(curBleDevice)
   }
 
-  protected fun write(bleDevice: BleDevice?, uuid_service: String?, uuid_write: String?, write_data: ByteArray?, bleWriteCallback: BleWriteCallback?) {
+  protected fun write(
+    bleDevice: BleDevice?,
+    uuid_service: String?,
+    uuid_write: String?,
+    write_data: ByteArray?,
+    bleWriteCallback: BleWriteCallback?
+  ) {
     if (bleDevice == null || uuid_service == null || uuid_write == null || write_data == null) return
     BleManager.getInstance().write(bleDevice, uuid_service, uuid_write, write_data, false,
       object : BleWriteCallback() {
@@ -266,7 +288,12 @@ abstract class ABleMgr {
     write(curBleDevice, UUID_SERVICE, UUID_DOWN, write_data, bleWriteCallback)
   }
 
-  protected fun read(bleDevice: BleDevice?, uuid_service: String?, uuid_read: String?, bleReadCallback: BleReadCallback?) {
+  protected fun read(
+    bleDevice: BleDevice?,
+    uuid_service: String?,
+    uuid_read: String?,
+    bleReadCallback: BleReadCallback?
+  ) {
     if (bleDevice == null) return
     BleManager.getInstance().read(bleDevice, uuid_service, uuid_read, object : BleReadCallback() {
       override fun onReadSuccess(data: ByteArray?) {
@@ -281,7 +308,8 @@ abstract class ABleMgr {
 
   protected fun notify(onReceived: (data: ByteArray?) -> Unit) {
     BleManager.getInstance().clearCharacterCallback(curBleDevice)
-    BleManager.getInstance().notify(curBleDevice, UUID_SERVICE, UUID_UP, object : BleNotifyCallback() {
+    BleManager.getInstance().notify(
+      curBleDevice, UUID_SERVICE, UUID_UP, object : BleNotifyCallback() {
       override fun onCharacteristicChanged(data: ByteArray?) {
         onReceived(data)
       }

@@ -1,15 +1,9 @@
 package com.ronds.eam.lib_sensor
 
-import android.os.Handler
-import android.os.Looper
 import com.clj.fastble.BleManager
-import com.clj.fastble.callback.BleNotifyCallback
 import com.clj.fastble.callback.BleWriteCallback
-import com.clj.fastble.data.BleDevice
 import com.clj.fastble.exception.BleException
-import com.clj.fastble.scan.BleScanRuleConfig
 import com.ronds.eam.lib_sensor.adapters.Decoder
-import com.ronds.eam.lib_sensor.adapters.Encoder
 import com.ronds.eam.lib_sensor.adapters.rh205.CalibrationVibrationAdapter
 import com.ronds.eam.lib_sensor.adapters.rh205.SampleParamsAdapter
 import com.ronds.eam.lib_sensor.adapters.rh205.SampleResultAdapter
@@ -29,11 +23,7 @@ import com.ronds.eam.lib_sensor.utils.pack
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.Arrays
-import java.util.Date
 import java.util.Locale
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -516,7 +506,7 @@ object RH205Mgr: ABleMgr() {
    * ok
    * 下达系统参数
    */
-  fun setSystemParams(data: Encoder, callback: BleInterfaces.ActionCallback?) {
+  fun setSystemParams(data: SystemParamsAdapter, callback: ActionCallback) {
     if (!isConnected()) {
       callback?.onFail(TIP_DISCONNECT)
       return

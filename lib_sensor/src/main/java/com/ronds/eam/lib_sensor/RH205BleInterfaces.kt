@@ -46,7 +46,7 @@ interface ScanCallback {
    *
    * @param devices ble 设备列表
    */
-  fun onScanResult(devices: List<BleDevice?>?)
+  fun onScanResult(devices: List<BleDevice>)
 }
 
 /**
