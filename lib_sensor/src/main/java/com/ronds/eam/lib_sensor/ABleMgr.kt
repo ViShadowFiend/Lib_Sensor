@@ -35,7 +35,6 @@ abstract class ABleMgr {
     const val TIMEOUT = 1000 * 10L
   }
 
-
   internal abstract val TIP_DISCONNECT: String
   internal abstract val TIP_TIMEOUT: String
 
@@ -48,7 +47,6 @@ abstract class ABleMgr {
   protected val singleExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
   protected var isScanning = false
-
 
   protected val ruleBuilder: BleScanRuleConfig.Builder = BleScanRuleConfig.Builder()
     //      .setServiceUuids(serviceUuids)      // 只扫描指定的服务的设备，可选

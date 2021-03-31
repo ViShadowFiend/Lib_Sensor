@@ -5,6 +5,11 @@ import com.clj.fastble.callback.BleWriteCallback
 import com.clj.fastble.exception.BleException
 import com.ronds.eam.lib_sensor.adapters.Decoder
 import com.ronds.eam.lib_sensor.adapters.rh205.CalibrationVibrationAdapter
+import com.ronds.eam.lib_sensor.adapters.rh205.GetDataDetailParam
+import com.ronds.eam.lib_sensor.adapters.rh205.GetDataInfoListParam
+import com.ronds.eam.lib_sensor.adapters.rh205.GetDataInfoListResult
+import com.ronds.eam.lib_sensor.adapters.rh205.GetDataListParams
+import com.ronds.eam.lib_sensor.adapters.rh205.GetDataListResult
 import com.ronds.eam.lib_sensor.adapters.rh205.SampleParamsAdapter
 import com.ronds.eam.lib_sensor.adapters.rh205.SampleResultAdapter
 import com.ronds.eam.lib_sensor.adapters.rh205.SampleTempResultAdapter
@@ -58,70 +63,22 @@ object RH205Mgr: ABleMgr() {
   private val isTempProcessing = AtomicBoolean(false)
 
   // 测温回调
-  private var sampleTempCallback: BleInterfaces.SampleTempCallback? = null
+  private var sampleTempCallback: SampleTempCallback? = null
 
   /**
    * ok
    * 开始温度采集
-   * @param ceWenFaSheLv 测温发射率
+   * @param tempEmi 测温发射率
    */
-  fun startSampleTemp(ceWenFaSheLv: Float = 0.97f, callback: BleInterfaces.SampleTempCallback) {
+  fun sampleTemp(param: SampleParamsAdapter, callback: SampleTempCallback) {
     sampleTempCallback = callback
     if (!isConnected()) {
       sampleTempCallback?.onFail(TIP_DISCONNECT)
       return
     }
     isTempProcessing.set(true)
-    // val response = addHeadCmdLengthAndCs(null, CMD_SAMPLING_DATA_TEMP)
-    val isTimeoutSample = AtomicBoolean(false)
-    val isReceivedSample = AtomicBoolean(false)
     val isTimeoutTemp = AtomicBoolean(false)
     val isReceivedTemp = AtomicBoolean(false)
-
-    // fun responseTemp() {
-    //   singleExecutor.submit {
-    //     isTimeoutTemp.set(false)
-    //     isReceivedTemp.set(false)
-    //     if (!isTempProcessing.get()) return@submit
-    //     doTimeout(200L, {
-    //       dTag("temp_205_send", response)
-    //       write(response)
-    //     }, 200L, 2, 500, isReceivedTemp, isTimeoutTemp) {
-    //       mainHandler.post {
-    //         if (isTempProcessing.get()) {
-    //           sampleTempCallback?.onFail("采集失败, 超时")
-    //         }
-    //         isTempProcessing.set(false)
-    //       }
-    //     }
-    //   }
-    // }
-
-    fun notifyTemp() {
-      singleExecutor.submit {
-        doSleep(200)
-        notify { data ->
-          dTag("notify_temp", data)
-          isReceivedTemp.set(true)
-          if (!isTempProcessing.get()) return@notify
-          if (isTimeoutTemp.get()) return@notify
-          var r = SampleTempResultAdapter()
-          try {
-            r = r.decode(data)
-          } catch (e: Exception) {
-            mainHandler.post {
-              if (isTempProcessing.get()) {
-                sampleTempCallback?.onFail("采集失败, 返回格式有误")
-              }
-              isTempProcessing.set(false)
-            }
-            return@notify
-          }
-          sampleTempCallback?.onReceiveTemp(r.temp)
-          // responseTemp()
-        }
-      }
-    }
 
     curFuture?.cancel(true)
     mainHandler.removeCallbacksAndMessages(null)
@@ -145,55 +102,9 @@ object RH205Mgr: ABleMgr() {
           return@notify
         }
         sampleTempCallback?.onReceiveTemp(r.temp)
-        // responseTemp()
       }
-      val sampleTemp = SampleParamsAdapter().apply { coe = ceWenFaSheLv }.encode()
+      val sampleTemp = param.encode()
       write(sampleTemp)
-      // notify { data ->
-      //   dTag("notify_set_sample_params", data)
-      //   if (data == null || data.size != 10) {
-      //     return@notify
-      //   }
-      //   isReceivedSample.set(true)
-      //   if (!isTempProcessing.get()) return@notify
-      //   if (isTimeoutSample.get()) {
-      //     mainHandler.removeCallbacksAndMessages(null)
-      //     BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
-      //     return@notify
-      //   }
-      //   if (data[4] != 1.toByte()) {
-      //     mainHandler.post {
-      //       sampleTempCallback?.onFail("下达采集参数失败")
-      //       mainHandler.removeCallbacksAndMessages(null)
-      //     }
-      //     BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
-      //   }
-      //   else {
-      //     dTag("temp", "下达采集参数成功")
-      //     notifyTemp()
-      //     responseTemp()
-      //   }
-      // }
-      // val action: () -> Unit = {
-      //   val data = bytesSetSampleParams(
-      //     0x00.toByte(), 0, 0, 0,
-      //     0, 0, 0, 0, 0, 0,
-      //     0, 1, 0, 0, 0, ceWenFaSheLv
-      //   )
-      //   write(data)
-      // }
-      //
-      // doTimeout(
-      //   200L, action, 0, 2, 500, isReceivedSample,
-      //   isTimeoutSample
-      // ) {
-      //   mainHandler.post {
-      //     if (isTempProcessing.get()) {
-      //       sampleTempCallback?.onFail("下达温度采集参数失败, 超时")
-      //     }
-      //     isTempProcessing.set(false)
-      //   }
-      // }
     }
   }
 
@@ -201,7 +112,7 @@ object RH205Mgr: ABleMgr() {
     sampleTempCallback = null
   }
 
-  fun startSample(params: SampleParamsAdapter, callback: SampleResultCallback) {
+  fun sample(params: SampleParamsAdapter, callback: SampleResultCallback) {
     if (!isConnected()) {
       callback.onFail(TIP_DISCONNECT)
       return
@@ -239,7 +150,7 @@ object RH205Mgr: ABleMgr() {
    * ok
    * 停止采集
    */
-  fun stopSample(callback: BleInterfaces.ActionCallback) {
+  fun stopSample(callback: ActionCallback) {
     if (!isConnected()) {
       callback.onFail(TIP_DISCONNECT)
       return
@@ -248,6 +159,7 @@ object RH205Mgr: ABleMgr() {
     val isTimeout = AtomicBoolean(false)
     isSampling.set(false)
     curFuture?.cancel(true)
+    removeSampleTempCallback()
     mainHandler.removeCallbacksAndMessages(null)
     curFuture = singleExecutor.submit {
       doSleep(200)
@@ -286,6 +198,52 @@ object RH205Mgr: ABleMgr() {
     }
   }
 
+  fun getDataList(param: GetDataListParams, callback: GetDataListResultCallback) {
+    if (!isConnected()) {
+      callback.onFail(TIP_DISCONNECT)
+      return
+    }
+    curFuture?.cancel(true)
+    mainHandler.removeCallbacksAndMessages(null)
+    curFuture = singleExecutor.submit {
+      doSleep(200)
+      notify { data ->
+        var r = GetDataListResult()
+        try {
+          r = r.decode(data)
+        } catch (e: Exception) {
+          return@notify
+        }
+        callback.onCallbackResult(r)
+      }
+      val data = param.encode()
+      write(data)
+    }
+  }
+
+  fun getDataInfoList(param: GetDataInfoListParam, callback: GetDataInfoListResultCallback) {
+    if (!isConnected()) {
+      callback.onFail(TIP_DISCONNECT)
+      return
+    }
+    curFuture?.cancel(true)
+    mainHandler.removeCallbacksAndMessages(null)
+    curFuture = singleExecutor.submit {
+      doSleep(200)
+      notify { data ->
+        var r = GetDataInfoListResult()
+        try {
+          r = r.decode(data)
+        } catch (e: Exception) {
+          return@notify
+        }
+        callback.onCallbackResult(r)
+      }
+      val data = param.encode()
+      write(data)
+    }
+  }
+
   // 收到的每包数据, 与 205 的协议规定, 振动数据不超过 320 包
   // list 中 index 对应收到的包的编号
   private val waveData: MutableList<ByteArray?> = MutableList(320) { null }
@@ -293,6 +251,11 @@ object RH205Mgr: ABleMgr() {
   // 回复下位机收包结果, 40 * 8bit, 总共 320 bit, 对应最多 320 包的收包情况.
   // 当收到包后, 将该包对应的 位 置 1
   private val response = ByteArray(40)
+
+  fun getDataDetail(param: GetDataDetailParam, callback: SampleVibCallback) {
+    // TODO
+    callback.onReceiveVibData(shortArrayOf(), 1f)
+  }
 
   /**
    * 测振
@@ -619,7 +582,7 @@ object RH205Mgr: ABleMgr() {
    * ok
    * 振动校准
    */
-  fun calibrate(encoder: CalibrationVibrationAdapter, callback: BleInterfaces.CalibrationCallback?) {
+  fun calibrate(encoder: CalibrationVibrationAdapter, callback: CalibrationCallback) {
     if (!isConnected()) {
       callback?.onFail(TIP_DISCONNECT)
       return
@@ -665,7 +628,7 @@ object RH205Mgr: ABleMgr() {
    * @param sn sn 号
    * @param byteArray 升级数据
    */
-  fun upgrade(sn: Int, byteArray: ByteArray?, callback: BleInterfaces.UpgradeCallback) {
+  fun upgrade(sn: Int, byteArray: ByteArray?, callback: UpgradeCallback) {
     if (!isConnected()) {
       callback.onUpgradeResult(false, TIP_DISCONNECT)
       return

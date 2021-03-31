@@ -1,6 +1,8 @@
 package com.ronds.eam.lib_sensor
 
 import com.clj.fastble.data.BleDevice
+import com.ronds.eam.lib_sensor.adapters.rh205.GetDataInfoListResult
+import com.ronds.eam.lib_sensor.adapters.rh205.GetDataListResult
 import com.ronds.eam.lib_sensor.adapters.rh205.SampleResultAdapter
 import com.ronds.eam.lib_sensor.adapters.rh205.SelfCheckAdapter
 import com.ronds.eam.lib_sensor.adapters.rh205.SystemParamsAdapter
@@ -25,6 +27,10 @@ interface ActionCallback : OnFailCallback {
    * 指令执行成功
    */
   fun onSuccess()
+}
+
+interface ResultCallback<in T> {
+  fun onCallbackResult(result: T)
 }
 
 /**
@@ -175,7 +181,7 @@ interface GetTemperatureLinearCoefficientCallback : OnFailCallback {
   fun onCallback(coe1: FloatArray?, coe2: FloatArray?, off: FloatArray?)
 }
 
-interface SampleResultCallback: OnFailCallback {
+interface SampleResultCallback : OnFailCallback {
   fun onCallback(result: SampleResultAdapter)
 }
 
@@ -191,3 +197,7 @@ interface UpgradeCallback {
    */
   fun onUpgradeResult(success: Boolean, msg: String?)
 }
+
+interface GetDataListResultCallback : ResultCallback<GetDataListResult>, OnFailCallback
+
+interface GetDataInfoListResultCallback : ResultCallback<GetDataInfoListResult>, OnFailCallback

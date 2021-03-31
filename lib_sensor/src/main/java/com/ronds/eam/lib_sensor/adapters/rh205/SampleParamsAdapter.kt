@@ -12,7 +12,7 @@ data class SampleParamsAdapter(
   // 轴向, 0 - z, 1 - x, 2 -y, 4 - 采集温度
   var axis: Byte = 0,
   // 测温发射率
-  var coe: Float = 0.97f,
+  var tempEmi: Float = 0.97f,
 ): Encoder {
   override val cmdTo: Byte
     get() = RH205Consts.CMD_SAMPLING_PARAMS
@@ -22,7 +22,7 @@ data class SampleParamsAdapter(
       2 to len,
       2 to freq,
       1 to axis,
-      4 to coe,
+      4 to tempEmi,
     )
       .let { Utils.buildBytes(9, it) }
       .run { pack() }
