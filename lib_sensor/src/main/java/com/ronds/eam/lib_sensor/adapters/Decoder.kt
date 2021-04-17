@@ -8,11 +8,8 @@ interface UnPacker {
   val cmdFrom: Byte
   val headFrom: Byte
 
-  // 原始包大小加上 head、cmd、len he cs 共 5 个字节
-  val packSize: Int
-
   @Throws(RException::class)
-  fun ByteArray?.unpack(): ByteArray?
+  fun ByteArray?.unpack(packSize: Int): ByteArray?
 }
 
 interface Decoder<out T> : UnPacker {
@@ -23,5 +20,7 @@ interface Decoder<out T> : UnPacker {
   fun decode(bytes: ByteArray?): T
 
   @Throws(RException::class)
-  override fun ByteArray?.unpack(): ByteArray = this.unpack(headFrom, cmdFrom, packSize)
+  override fun ByteArray?.unpack(packSize: Int): ByteArray = this.unpack(
+    headFrom, cmdFrom, packSize
+  )
 }

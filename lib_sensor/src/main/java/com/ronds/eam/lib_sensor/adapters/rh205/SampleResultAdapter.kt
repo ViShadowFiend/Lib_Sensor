@@ -16,11 +16,9 @@ data class SampleResultAdapter(
 ) : Decoder<SampleResultAdapter> {
   override val cmdFrom: Byte
     get() = RH205Consts.CMD_SAMPLING_PARAMS
-  override val packSize: Int
-    get() = 21
 
   override fun decode(bytes: ByteArray?): SampleResultAdapter {
-    return bytes.unpack().let {
+    return bytes.unpack(21).let {
       SampleResultAdapter().apply {
         sn = it.getInt(0)
         coe = it.getFloat(4)
@@ -38,11 +36,9 @@ data class SampleTempResultAdapter(
 ) : Decoder<SampleTempResultAdapter> {
   override val cmdFrom: Byte
     get() = RH205Consts.CMD_SAMPLING_PARAMS
-  override val packSize: Int
-    get() = 13
 
   override fun decode(bytes: ByteArray?): SampleTempResultAdapter {
-    return bytes.unpack().let {
+    return bytes.unpack(13).let {
       SampleTempResultAdapter().apply {
         sn = it.getInt(0)
         temp = it.getFloat(4)

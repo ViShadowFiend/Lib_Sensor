@@ -154,35 +154,18 @@ interface CalibrationCallback : OnFailCallback {
 }
 
 /**
- * 获取温度校准系数的回调接口
+ * 下达临时采集回调接口
  */
-interface GetTemperatureCalibrationCoefficientCallback : OnFailCallback {
-  /**
-   * 回调获取到的温度校准系数
-   *
-   * @param off 4 字节浮点型, 偏移.
-   * @param env_temp 4 字节浮点型, 环境温度.
-   * @param tar 4 字节浮点型, 目标值
-   */
-  fun onCallback(off: Float, env_temp: Float, tar: Float)
-}
-
-/**
- * 获取温度线性系数的回调接口
- */
-interface GetTemperatureLinearCoefficientCallback : OnFailCallback {
-  /**
-   * 回调温度线性系数
-   *
-   * @param coe1 系数 1, 7 个 4 字节浮点型的数组
-   * @param coe2 系数 2, 7 个 4 字节浮点型的数组
-   * @param off 补偿值, 7 个 4 字节浮点型的数组
-   */
-  fun onCallback(coe1: FloatArray?, coe2: FloatArray?, off: FloatArray?)
-}
-
 interface SampleResultCallback : OnFailCallback {
-  fun onCallback(result: SampleResultAdapter)
+  /**
+   * 下达临时采集指令, 首先回调的数据
+   */
+  fun onCallbackSampleResult(result: SampleResultAdapter)
+
+  /**
+   * 之后会回调波形数据
+   */
+  fun onReceiveVibData(vibData: ShortArray?)
 }
 
 /**

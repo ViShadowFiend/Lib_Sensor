@@ -3,14 +3,14 @@ package com.ronds.eam.lib_sensor.adapters.rh205
 import com.ronds.eam.lib_sensor.adapters.Decoder
 import com.ronds.eam.lib_sensor.adapters.Encoder
 import com.ronds.eam.lib_sensor.consts.RH205Consts
+import com.ronds.eam.lib_sensor.exceptions.RException
+import com.ronds.eam.lib_sensor.utils.ByteUtil
 import com.ronds.eam.lib_sensor.utils.Utils
 import com.ronds.eam.lib_sensor.utils.getByte
-import com.ronds.eam.lib_sensor.utils.getChar
 import com.ronds.eam.lib_sensor.utils.getFloat
 import com.ronds.eam.lib_sensor.utils.getInt
 import com.ronds.eam.lib_sensor.utils.getShort
 import com.ronds.eam.lib_sensor.utils.getString
-import java.lang.IllegalArgumentException
 
 data class SystemParamsAdapter(
   var channel: Byte = 0,
@@ -33,7 +33,6 @@ data class SystemParamsAdapter(
 
   override val cmdTo: Byte = RH205Consts.CMD_SET_SYSTEM_PARAMS
   override val cmdFrom: Byte = RH205Consts.CMD_GET_SYSTEM_PARAMS
-  override val packSize: Int = 65
 
   override fun encode(): ByteArray {
     checkChannel(channel)
@@ -41,6 +40,8 @@ data class SystemParamsAdapter(
     checkLoraTxFreq(originLoraTxFreq)
     loraTxFreq = encodeLoraTxFreq(originLoraTxFreq)
     loraRxFreq = encodeLoraRxFreq(originLoraRxFreq, channel)
+    val bs = bleName.toByteArray()
+    val len = bs.size
     return listOf<Pair<Int, Any>>(
       1 to channel,
       4 to loraTxFreq,
@@ -63,26 +64,34 @@ data class SystemParamsAdapter(
   }
 
   override fun decode(bytes: ByteArray?): SystemParamsAdapter {
-    val unpack = bytes.unpack()
+    val unpack = try {
+      bytes.unpack(65)
+    } catch (e: Exception) {
+      throw RException("unpack失败. len = ${bytes?.size}.", e)
+    }
     return SystemParamsAdapter().apply {
-      channel = unpack.getByte(0)
-      checkChannel(channel)
-      loraTxFreq = unpack.getInt(1)
-      originLoraTxFreq = decodeLoraTxFreq(loraTxFreq)
-      checkLoraTxFreq(originLoraTxFreq)
-      loraRxFreq = unpack.getInt(5)
-      originLoraRxFreq = decodeLoraRxFreq(loraRxFreq, channel)
-      checkLoraRxFreq(originLoraRxFreq)
-      loraTxPow = unpack.getByte(9)
-      bleName = unpack.getString(10, 10)
-      sn = unpack.getInt(20)
-      mcVersion = unpack.getShort(24)
-      adVersion = unpack.getByte(26)
-      sVersionMain = unpack.getShort(27)
-      sVersionSub = unpack.getByte(29)
-      accCoe = unpack.getFloat(32)
-      accCoeX = unpack.getFloat(36)
-      accCoeY = unpack.getFloat(40)
+      try {
+        channel = unpack.getByte(0)
+        checkChannel(channel)
+        loraTxFreq = unpack.getInt(1)
+        originLoraTxFreq = decodeLoraTxFreq(loraTxFreq)
+        checkLoraTxFreq(originLoraTxFreq)
+        loraRxFreq = unpack.getInt(5)
+        originLoraRxFreq = decodeLoraRxFreq(loraRxFreq, channel)
+        checkLoraRxFreq(originLoraRxFreq)
+        loraTxPow = unpack.getByte(9)
+        bleName = unpack.getString(10, 10)
+        sn = unpack.getInt(20)
+        mcVersion = unpack.getShort(24)
+        adVersion = unpack.getByte(26)
+        sVersionMain = unpack.getShort(27)
+        sVersionSub = unpack.getByte(29)
+        accCoe = unpack.getFloat(32)
+        accCoeX = unpack.getFloat(36)
+        accCoeY = unpack.getFloat(40)
+      } catch (e: Exception) {
+        throw RException("解析错误. ${ByteUtil.parseByte2HexStr(bytes)}", e)
+      }
     }
   }
 
@@ -91,7 +100,7 @@ data class SystemParamsAdapter(
   }
 
   private fun checkLoraTxFreq(freq: Float): Boolean {
-    val r =  freq.toString().matches(Regex("5(10\\.5|0[0-9]\\.[05])"))
+    val r = freq.toString().matches(Regex("5(10\\.5|0[0-9]\\.[05])"))
     // if (!r) {
     //   throw IllegalArgumentException("LoraTxFreq $freq illegal.")
     // }
@@ -100,7 +109,11 @@ data class SystemParamsAdapter(
 
   private fun checkLoraRxFreq(freq: Float): Boolean {
     val r = freq.toString()
-      .matches(Regex("4(70\\.7|72\\.3|73\\.9|75\\.5|77\\.1|78\\.7|80\\.3|81\\.9|83\\.5|85\\.1|86\\.7|88\\.3)"))
+      .matches(
+        Regex(
+          "4(70\\.7|72\\.3|73\\.9|75\\.5|77\\.1|78\\.7|80\\.3|81\\.9|83\\.5|85\\.1|86\\.7|88\\.3)"
+        )
+      )
     // if (!r) {
     //   throw IllegalArgumentException("LoraRxFreq $freq illegal.")
     // }
@@ -118,14 +131,14 @@ data class SystemParamsAdapter(
   }
 
   private fun encodeLoraRxFreq(freq: Float, channel: Byte): Int {
-    val a: Int = (channel - 1) / 8
-    val r = (freq + a * 0.2f) * 10_0000
+    val a: Int = (channel - 1) % 8
+    val r = (freq + a * 0.2f) * 100_0000
     return r.toInt()
   }
 
   private fun decodeLoraRxFreq(freq: Int, channel: Byte): Float {
-    val a: Int = (channel - 1) / 8
-    val r = freq / 10_0000 - a * 0.2f
+    val a: Int = (channel - 1) % 8
+    val r = freq / 100_0000.toFloat() - a * 0.2f
     return r
   }
 }

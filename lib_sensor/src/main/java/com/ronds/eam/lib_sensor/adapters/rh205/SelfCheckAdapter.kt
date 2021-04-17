@@ -3,13 +3,14 @@ package com.ronds.eam.lib_sensor.adapters.rh205
 import com.ronds.eam.lib_sensor.adapters.Decoder
 import com.ronds.eam.lib_sensor.consts.RH205Consts
 import com.ronds.eam.lib_sensor.utils.getByte
+import com.ronds.eam.lib_sensor.utils.getInt
 import com.ronds.eam.lib_sensor.utils.getString
 
 data class SelfCheckAdapter(
   // 节点类型
   var nodeType: Byte = 0,
   // sn
-  var sn: String = "",
+  var sn: Int = 0,
   // 主晶振状态
   var mainStatus: Byte = 0,
   // rtc 晶振状态
@@ -24,13 +25,12 @@ data class SelfCheckAdapter(
   var rfStatus: Byte = 0,
 ): Decoder<SelfCheckAdapter> {
   override val cmdFrom: Byte = RH205Consts.CMD_SELF_CHECK
-  override val packSize: Int = 20
 
   override fun decode(bytes: ByteArray?): SelfCheckAdapter {
-    val d = bytes.unpack()
+    val d = bytes.unpack(20)
     return SelfCheckAdapter().apply {
       nodeType = d.getByte(0)
-      sn = d.getString(1, 4)
+      sn = d.getInt(1)
     }
   }
 

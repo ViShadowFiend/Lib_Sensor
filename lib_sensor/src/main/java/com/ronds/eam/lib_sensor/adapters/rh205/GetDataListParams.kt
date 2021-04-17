@@ -8,7 +8,7 @@ data class GetDataListParams(
   var dataType: Byte
 ) : Encoder {
   override val cmdTo: Byte
-    get() = RH205Consts.CMD_SAMPLING_PARAMS
+    get() = RH205Consts.CMD_DATA_LIST
 
   override fun encode(): ByteArray {
     return byteArrayOf(dataType).pack()

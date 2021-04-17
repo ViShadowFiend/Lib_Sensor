@@ -20,6 +20,7 @@ import com.clj.fastble.scan.BleScanRuleConfig
 import com.ronds.eam.lib_sensor.consts.UUID_DOWN
 import com.ronds.eam.lib_sensor.consts.UUID_SERVICE
 import com.ronds.eam.lib_sensor.consts.UUID_UP
+import com.ronds.eam.lib_sensor.utils.ByteUtil
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -54,6 +55,16 @@ abstract class ABleMgr {
     //      .setDeviceMac(mac)                  // 只扫描指定mac的设备，可选
     //      .setAutoConnect(isAutoConnect)      // 连接时的autoConnect参数，可选，默认false
     .setScanTimeOut(TIMEOUT)              // 扫描超时时间，可选，默认10秒
+
+  protected var onLog: ((String) -> Unit)? = null
+
+  fun setLogCallback(c: (s: String) -> Unit) {
+    this.onLog = c
+  }
+
+  fun removeLogCallback() {
+    this.onLog = null
+  }
 
   /**
    * 初始化
@@ -270,13 +281,16 @@ abstract class ABleMgr {
     bleWriteCallback: BleWriteCallback?
   ) {
     if (bleDevice == null || uuid_service == null || uuid_write == null || write_data == null) return
+    onLog?.invoke("WRITE ${ByteUtil.byteArray2HexString(write_data)}")
     BleManager.getInstance().write(bleDevice, uuid_service, uuid_write, write_data, false,
       object : BleWriteCallback() {
         override fun onWriteSuccess(current: Int, total: Int, justWrite: ByteArray?) {
+          onLog?.invoke("WRITE 成功 ${ByteUtil.byteArray2HexString(write_data)}")
           bleWriteCallback?.onWriteSuccess(current, total, justWrite)
         }
 
         override fun onWriteFailure(exception: BleException?) {
+          onLog?.invoke("WRITE 失败 ${exception}")
           bleWriteCallback?.onWriteFailure(exception)
         }
       })
@@ -295,13 +309,19 @@ abstract class ABleMgr {
     if (bleDevice == null) return
     BleManager.getInstance().read(bleDevice, uuid_service, uuid_read, object : BleReadCallback() {
       override fun onReadSuccess(data: ByteArray?) {
+        onLog?.invoke("READ 成功 ${ByteUtil.byteArray2HexString(data)}")
         bleReadCallback?.onReadSuccess(data)
       }
 
       override fun onReadFailure(exception: BleException?) {
+        onLog?.invoke("READ 失败 ${exception}")
         bleReadCallback?.onReadFailure(exception)
       }
     })
+  }
+
+  protected fun read(bleReadCallback: BleReadCallback) {
+    read(curBleDevice, UUID_SERVICE, UUID_DOWN, bleReadCallback)
   }
 
   protected fun notify(onReceived: (data: ByteArray?) -> Unit) {
@@ -309,14 +329,17 @@ abstract class ABleMgr {
     BleManager.getInstance().notify(
       curBleDevice, UUID_SERVICE, UUID_UP, object : BleNotifyCallback() {
       override fun onCharacteristicChanged(data: ByteArray?) {
+        onLog?.invoke("Notify 收到 ${ByteUtil.byteArray2HexString(data)}")
         onReceived(data)
       }
 
       override fun onNotifyFailure(exception: BleException?) {
+        onLog?.invoke("Notify 失败 ${exception}")
         dTag("notify_", exception)
       }
 
       override fun onNotifySuccess() {
+        onLog?.invoke("Notify 成功.")
       }
     })
   }
@@ -462,6 +485,17 @@ abstract class ABleMgr {
 
   protected fun stopNotify() {
     BleManager.getInstance().stopNotify(curBleDevice, UUID_SERVICE, UUID_UP)
+  }
+
+  protected fun clearCharacterCallback() {
+    BleManager.getInstance().clearCharacterCallback(curBleDevice)
+  }
+
+  protected fun release() {
+    curFuture?.cancel(true)
+    // stopNotify()
+    clearCharacterCallback()
+    mainHandler.removeCallbacksAndMessages(null)
   }
 
   protected fun doSleep(mills: Long = 100) {
