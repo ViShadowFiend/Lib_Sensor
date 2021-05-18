@@ -1,5 +1,6 @@
 package com.ronds.eam.lib_sensor
 
+import android.util.Log
 import com.clj.fastble.BleManager
 import com.clj.fastble.callback.BleNotifyCallback
 import com.clj.fastble.callback.BleReadCallback
@@ -33,14 +34,12 @@ import com.ronds.eam.lib_sensor.utils.ByteUtil
 import com.ronds.eam.lib_sensor.utils.getInt
 import com.ronds.eam.lib_sensor.utils.getShort
 import com.ronds.eam.lib_sensor.utils.pack
-import kotlinx.coroutines.CoroutineScope
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.Arrays
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.coroutines.CoroutineContext
 
 private const val DATA_LEN = 232
 
@@ -159,9 +158,9 @@ object RH205Mgr : ABleMgr() {
 
     val caiJiChangDu = params.len
     val fenXiPinLv = params.freq * 100
-    val collectTime = (caiJiChangDu * 1024 / fenXiPinLv / 2.56 * 1000).toLong()
+    val collectTime = (caiJiChangDu * 1024 / fenXiPinLv / 2.56 * 1000).toLong() + 60000
     // caiJiChangDu * 1024 为多少个点, * 2 因为每个点(short) 2个字节, / 4 是预估传输速度为 4b/ms
-    val transferTime = (caiJiChangDu * 1024 * 2 / 4).toLong()
+    val transferTime = (caiJiChangDu * 1024 * 2 / 4).toLong() + 60000
 
     val isTimeoutSample = AtomicBoolean(false)
     val isReceivedSample = AtomicBoolean(false)
@@ -182,136 +181,139 @@ object RH205Mgr : ABleMgr() {
     release()
     doSleep(100)
 
-    BleManager.getInstance().notify(curBleDevice, UUID_SERVICE, UUID_UP, object : BleNotifyCallback() {
-      override fun onCharacteristicChanged(data: ByteArray?) {
-        onLog?.invoke("notify 收到. ${ByteUtil.parseByte2HexStr(data)}")
-        if (data == null || data.size < 5 || data[0] != HEAD_FROM_SENSOR) {
-          return
-        }
-        when (data[1]) {
-          CMD_SAMPLING_PARAMS -> { // 收到下达测振的回复
-                dTag("notify_sample", data)
-            isReceivedSample.set(true)
-            if (isTimeoutSample.get()) {
-              return
-            }
-                var r = SampleResultAdapter()
-                try {
-                  r = r.decode(data)
-                } catch (e: Exception) {
-                  mainHandler.post {
-                    if (isSampling.get()) {
-                      callback.onFail("采集失败, 返回格式有误")
-                    }
-                    isSampling.set(false)
+    BleManager.getInstance()
+      .notify(curBleDevice, UUID_SERVICE, UUID_UP, object : BleNotifyCallback() {
+        override fun onCharacteristicChanged(data: ByteArray?) {
+          onLog?.invoke("notify 收到. ${ByteUtil.parseByte2HexStr(data)}")
+          if (data == null || data.size < 5 || data[0] != HEAD_FROM_SENSOR) {
+            return
+          }
+          Log.d("收到: ", "${ByteUtil.parseByte2HexStr(byteArrayOf(data[1]))} ${System.currentTimeMillis()}")
+          when (data[1]) {
+            CMD_SAMPLING_PARAMS -> { // 收到下达测振的回复
+              dTag("notify_sample", data)
+              isReceivedSample.set(true)
+              if (isTimeoutSample.get()) {
+                return
+              }
+              var r = SampleResultAdapter()
+              try {
+                r = r.decode(data)
+              } catch (e: Exception) {
+                mainHandler.post {
+                  if (isSampling.get()) {
+                    callback.onFail("采集失败, 返回格式有误")
                   }
+                  isSampling.set(false)
+                }
+                return
+              }
+              callback.onCallbackSampleResult(r)
+              // 等待 采集时间, 若还未收到波形数据, 则超时
+              doRetry(0, {}, collectTime, 0, 5000, isReceivedWaveData, isTimeoutWaveData) {
+                mainHandler.post {
+                  callback.onFail("等待波形数据超时")
+                  mainHandler.removeCallbacksAndMessages(null)
+                  BleManager.getInstance().clearCharacterCallback(curBleDevice)
+                }
+              }
+              // 等待 采集时间 + 传输时间, 若还未收到结果确认, 则超时
+              doRetry(
+                0, {}, collectTime + transferTime, 0, 5000, isReceivedResultFirst,
+                isTimeoutResultFirst
+              ) {
+                mainHandler.post {
+                  callback.onFail("等待结果确认超时")
+                  mainHandler.removeCallbacksAndMessages(null)
+                  BleManager.getInstance().clearCharacterCallback(curBleDevice)
+                }
+              }
+            }
+            CMD_DATA_DETAIL -> { // 收到测振数据
+              isReceivedWaveData.set(true)
+              if (isTimeoutWaveData.get()) {
+                return
+              }
+              val curBagNum: Int = data.getShort(4).toInt()
+              val bytes = Arrays.copyOfRange(data, 6, data.size - 1)
+              waveData[curBagNum] = bytes
+            }
+            CMD_WAVE_DATA_RESULT -> {
+              if (data.size != 9) {
+                return
+              }
+              if (isReceivedResultFirst.get()) {
+                isReceivedResultOthers.set(true)
+                if (isTimeoutResultOthers.get()) {
                   return
                 }
-                callback.onCallbackSampleResult(r)
-            // 等待 采集时间, 若还未收到波形数据, 则超时
-            doRetry(0, {}, collectTime, 0, 5000, isReceivedWaveData, isTimeoutWaveData) {
-              mainHandler.post {
-                callback.onFail("等待波形数据超时")
-                mainHandler.removeCallbacksAndMessages(null)
-                BleManager.getInstance().clearCharacterCallback(curBleDevice)
+              } else {
+                isReceivedResultFirst.set(true)
+                if (isTimeoutResultFirst.get()) {
+                  return
+                }
               }
-            }
-            // 等待 采集时间 + 传输时间, 若还未收到结果确认, 则超时
-            doRetry(0, {}, collectTime + transferTime, 0, 5000, isReceivedResultFirst, isTimeoutResultFirst) {
-              mainHandler.post {
-                callback.onFail("等待结果确认超时")
-                mainHandler.removeCallbacksAndMessages(null)
-                BleManager.getInstance().clearCharacterCallback(curBleDevice)
-              }
-            }
-          }
-          CMD_DATA_DETAIL -> { // 收到测振数据
-            isReceivedWaveData.set(true)
-            if (isTimeoutWaveData.get()) {
-              return
-            }
-            val curBagNum: Int = data.getShort(4).toInt()
-            val bytes = Arrays.copyOfRange(data, 6, data.size - 1)
-            waveData[curBagNum] = bytes
-          }
-          CMD_WAVE_DATA_RESULT -> {
-            if (data.size != 9) {
-              return
-            }
-            if (isReceivedResultFirst.get()) {
-              isReceivedResultOthers.set(true)
-              if (isTimeoutResultOthers.get()) {
-                return
-              }
-            } else {
-              isReceivedResultFirst.set(true)
-              if (isTimeoutResultFirst.get()) {
-                return
-              }
-            }
-            totalBagCount = ByteUtil.getIntFromByteArray(data, 4)
-            var isEnd = true
-            for (i in 0 until totalBagCount) {
-              if (waveData[i] != null) {
-                updateBit(response, i)
-              }
-              else {
-                isEnd = false
-              }
-            }
-            val log = ByteUtil.bytes2BitStr(response).substring(0, totalBagCount)
-            onLog?.invoke("response: $log")
-            if (isEnd) {
-              val bytes: MutableList<Byte> = mutableListOf()
+              totalBagCount = ByteUtil.getIntFromByteArray(data, 4)
+              var isEnd = true
               for (i in 0 until totalBagCount) {
-                waveData[i]!!.forEach { bytes.add(it) }
+                if (waveData[i] != null) {
+                  updateBit(response, i)
+                } else {
+                  isEnd = false
+                }
               }
-              val shorts: ShortArray = ByteUtil.bytesToShorts(bytes.toByteArray())
-              callback.onReceiveVibData(shorts)
-              val res = response.pack(HEAD_TO_SENSOR, CMD_WAVE_DATA_RESULT)
-              doSleep(50)
-              write(res)
-              mainHandler.post {
-                release()
-              }
-            }
-            else {
-              doRetry(50L, {
+              val log = ByteUtil.bytes2BitStr(response).substring(0, totalBagCount)
+              onLog?.invoke("response: $log")
+              if (isEnd) {
+                val bytes: MutableList<Byte> = mutableListOf()
+                for (i in 0 until totalBagCount) {
+                  waveData[i]!!.forEach { bytes.add(it) }
+                }
+                val shorts: ShortArray = ByteUtil.bytesToShorts(bytes.toByteArray())
+                callback.onReceiveVibData(shorts)
                 val res = response.pack(HEAD_TO_SENSOR, CMD_WAVE_DATA_RESULT)
+                doSleep(50)
                 write(res)
-              }, transferTime, 2, 5000, isReceivedResultOthers, isTimeoutResultOthers) {
                 mainHandler.post {
-                  callback.onFail("回复结果超时")
                   release()
+                }
+              } else {
+                doRetry(50L, {
+                  val res = response.pack(HEAD_TO_SENSOR, CMD_WAVE_DATA_RESULT)
+                  write(res)
+                }, transferTime, 2, 5000, isReceivedResultOthers, isTimeoutResultOthers) {
+                  mainHandler.post {
+                    callback.onFail("回复结果超时")
+                    release()
+                  }
                 }
               }
             }
           }
         }
-      }
 
-      override fun onNotifyFailure(exception: BleException?) {
-        onLog?.invoke("notify 失败. ${exception?.description}")
-        mainHandler.post {
-          callback.onFail(exception?.description ?: "notify 失败")
-          mainHandler.removeCallbacksAndMessages(null)
-          BleManager.getInstance().clearCharacterCallback(curBleDevice)
-        }
-      }
-
-      override fun onNotifySuccess() {
-        onLog?.invoke("notify 成功")
-        doRetry(100, {
-          val data = params.encode()
-          write(data)
-        }, 0, 2, 400, isReceivedSample, isTimeoutSample) {
+        override fun onNotifyFailure(exception: BleException?) {
+          onLog?.invoke("notify 失败. ${exception?.description}")
           mainHandler.post {
-            callback.onFail("下达采集参数超时")
-            release()
+            callback.onFail(exception?.description ?: "notify 失败")
+            mainHandler.removeCallbacksAndMessages(null)
+            BleManager.getInstance().clearCharacterCallback(curBleDevice)
           }
         }
-      }
-    })
+
+        override fun onNotifySuccess() {
+          onLog?.invoke("notify 成功")
+          doRetry(100, {
+            val data = params.encode()
+            write(data)
+          }, 0, 2, 400, isReceivedSample, isTimeoutSample) {
+            mainHandler.post {
+              callback.onFail("下达采集参数超时")
+              release()
+            }
+          }
+        }
+      })
   }
 
   /**

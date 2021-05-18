@@ -147,6 +147,47 @@ class VibResult private constructor(private val builder: Builder) {
   }
 
   /**
+   * 波形或频谱图 x 轴最小间隔
+   */
+  fun dx(): Double {
+    return when(builder.samplingMode) {
+      1 -> {
+        val size = data().size
+        return if (size <= 1) {
+          1.0
+        } else {
+          builder.freq / 2 / (data().size - 1).toDouble()
+        }
+      }
+      else -> 1000.0 / builder.freq
+    }
+  }
+
+  /**
+   * 波形或频谱图 x 轴最大值
+   */
+  fun xMax(): Double {
+    return when(builder.samplingMode) {
+      1 -> (data().size - 1) * dx()
+      else -> (builder.len) / (builder.freq) * 1000.0
+    }
+  }
+
+  /**
+   * 最小
+   */
+  fun min(): Double {
+    return MathUtil.min(data())
+  }
+
+  /**
+   * 最大
+   */
+  fun max(): Double {
+    return MathUtil.max(data())
+  }
+
+  /**
    * 波形或频谱数据, 根据 builder 中设置的 samplingMode
    */
   fun data(): DoubleArray {
@@ -176,7 +217,7 @@ class VibResult private constructor(private val builder: Builder) {
     var data: List<Short> = listOf()
 
     // 加速度系数
-    var accCoe: Float = 0f
+    var accCoe: Float = 0.97f
 
     // 0 - 加速度, 1 - 速度, 2 - 位移
     var signalType: Int = 0
@@ -187,14 +228,21 @@ class VibResult private constructor(private val builder: Builder) {
     // 0 - 有效值, 1 - 峰值, 2 - 峰峰值, 3 - 峭度值
     var paraType: Int = 0
 
-    // 采样频率
-    var freq: Float = 0f
+    // 采样频率, hz
+    // 采样频率 = 分析频率 * 2.56.
+    // iEAM 下发上限频率为分析频率, 逻辑中采样频率为 上限频率 * 2.56.
+    // 下发给下位机的是分析频率.
+    // RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
+    var freq: Float = 2.56f * 1000
 
-    // 上限频率
-    var freqLower: Float = 100f
+    // 下限频率, hz
+    var freqLower: Float = 0.1f
 
-    // 下限频率
-    var freqUpper: Float = 5f
+    // 上限频率, hz
+    var freqUpper: Float = 40000f
+
+    // 采集长度, byte
+    var len: Int = 1 * 1024
 
     fun build(): VibResult = VibResult(this)
   }
