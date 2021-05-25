@@ -148,6 +148,8 @@ class VibResult private constructor(private val builder: Builder) {
 
   /**
    * 波形或频谱图 x 轴最小间隔
+   * samplingMode - 0 - 时域波形 - 单位为 ms
+   * samplingMode - 1 - 频谱 - 单位为 Hz
    */
   fun dx(): Double {
     return when(builder.samplingMode) {
@@ -230,8 +232,9 @@ class VibResult private constructor(private val builder: Builder) {
 
     // 采样频率, hz
     // 采样频率 = 分析频率 * 2.56.
-    // iEAM 下发上限频率为分析频率, 逻辑中采样频率为 上限频率 * 2.56.
+    //
     // 下发给下位机的是分析频率.
+    // iEAM(RH517) 把上限频率当作分析频率下发, 逻辑中采样频率为 上限频率 * 2.56.
     // RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
     var freq: Float = 2.56f * 1000
 
