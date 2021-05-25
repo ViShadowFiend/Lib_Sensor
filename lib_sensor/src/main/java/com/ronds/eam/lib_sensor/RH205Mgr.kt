@@ -155,12 +155,23 @@ object RH205Mgr : ABleMgr() {
       callback.onFail(TIP_DISCONNECT)
       return
     }
-
-    val caiJiChangDu = params.len
+    // 采集长度. 代表多少个点
+    val caiJiChangDu = params.len * 1024
+    // 分析频率, 单位 Hz
     val fenXiPinLv = params.freq * 100
-    val collectTime = (caiJiChangDu * 1024 / fenXiPinLv / 2.56 * 1000).toLong() + 60000
-    // caiJiChangDu * 1024 为多少个点, * 2 因为每个点(short) 2个字节, / 4 是预估传输速度为 4b/ms
-    val transferTime = (caiJiChangDu * 1024 * 2 / 4).toLong() + 60000
+    // 采样频率, 单位 hz
+    // 一般情况. 采样频率 = 分析频率 * 2.56.
+    // RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
+    val caiYangPinLv = fenXiPinLv * 2.5
+    // 采集时间. 单位 ms.
+    // 频率为每秒振动多少下. 振动一下即有一个点的数据. 频率为多少, 即每秒有采集多少个点的数据
+    val collectTime = (caiJiChangDu.toDouble() / caiYangPinLv * 1000.0).toLong()
+    // 回传时间. 单位 ms.
+    // * 2 因为每个点(short) 2个字节, / 4 是预估传输速度为 4b/ms
+    // 预留 10 * 1000 ms. 因为 RH205 时常超时
+    val transferTime = (caiJiChangDu * 2.0 / 4).toLong() + 10000
+    // 采样数据长度. 即有多少个字节的数据
+    val dataLength = caiJiChangDu * 2
 
     val isTimeoutSample = AtomicBoolean(false)
     val isReceivedSample = AtomicBoolean(false)
@@ -176,7 +187,6 @@ object RH205Mgr : ABleMgr() {
     var ratio: Float = 0f
     var crc: Int = 0
     var totalBagCount = 0
-    val dataLength = caiJiChangDu * 1024 * 2
 
     release()
     doSleep(100)
@@ -269,7 +279,9 @@ object RH205Mgr : ABleMgr() {
                 for (i in 0 until totalBagCount) {
                   waveData[i]!!.forEach { bytes.add(it) }
                 }
-                val shorts: ShortArray = ByteUtil.bytesToShorts(bytes.toByteArray())
+                // RH205 最后一包有填充了 0x00 的无效数据, 根据 dataLen 截掉小尾巴
+                val bytesArr = bytes.toByteArray().copyOfRange(0, dataLength)
+                val shorts: ShortArray = ByteUtil.bytesToShorts(bytesArr)
                 callback.onReceiveVibData(shorts)
                 val res = response.pack(HEAD_TO_SENSOR, CMD_WAVE_DATA_RESULT)
                 doSleep(50)

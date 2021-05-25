@@ -5,7 +5,7 @@ import com.ronds.eam.lib_sensor.consts.RH205Consts
 import com.ronds.eam.lib_sensor.utils.Utils
 
 data class SampleParamsAdapter(
-  // 采集长度, 单位 K, 1/2/4/8/16/32
+  // 采集长度, 单位 K个点, 1/2/4/8/16/32. 如 2K, 即 2 * 1024 个点. 每个点 2 个字节, 即 4096 Byte
   var len: Short = 0,
   // 分析频率, 单位 100hz, 5, 10, 20, 50, 100, 200,
   var freq: Short = 0,

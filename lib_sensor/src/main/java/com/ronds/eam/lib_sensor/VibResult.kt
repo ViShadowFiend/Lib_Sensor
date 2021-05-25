@@ -244,7 +244,7 @@ class VibResult private constructor(private val builder: Builder) {
     // 上限频率, hz
     var freqUpper: Float = 40000f
 
-    // 采集长度, byte
+    // 采集长度, 多少个点. 1 个点为 2 个 byte(short).
     var len: Int = 1 * 1024
 
     fun build(): VibResult = VibResult(this)
