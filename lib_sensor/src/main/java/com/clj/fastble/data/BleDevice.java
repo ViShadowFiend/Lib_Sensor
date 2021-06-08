@@ -4,7 +4,8 @@ package com.clj.fastble.data;
 import android.bluetooth.BluetoothDevice;
 import android.os.Parcel;
 import android.os.Parcelable;
-
+import java.util.Arrays;
+import java.util.Objects;
 
 public class BleDevice implements Parcelable {
 
@@ -106,4 +107,25 @@ public class BleDevice implements Parcelable {
         this.mTimestampNanos = timestampNanos;
     }
 
+    @Override public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        BleDevice bleDevice = (BleDevice) o;
+
+        if (mRssi != bleDevice.mRssi) return false;
+        if (mTimestampNanos != bleDevice.mTimestampNanos) return false;
+        if (!Objects.equals(mDevice, bleDevice.mDevice)) {
+            return false;
+        }
+        return Arrays.equals(mScanRecord, bleDevice.mScanRecord);
+    }
+
+    @Override public int hashCode() {
+        int result = mDevice != null ? mDevice.hashCode() : 0;
+        result = 31 * result + Arrays.hashCode(mScanRecord);
+        result = 31 * result + mRssi;
+        result = 31 * result + (int) (mTimestampNanos ^ (mTimestampNanos >>> 32));
+        return result;
+    }
 }
