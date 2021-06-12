@@ -40,8 +40,12 @@ import java.util.Arrays
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.roundToInt
 
-private const val DATA_LEN = 232
+// 波形数据传输或者升级文件传输时, 每包有效数最大长度
+private const val CHUNK_LEN = 232
+// 波形数据传输或者升级文件传输最大包数
+private const val MAX_CHUNK_COUNT = 320
 
 object RH205Mgr : ABleMgr() {
 
@@ -94,11 +98,11 @@ object RH205Mgr : ABleMgr() {
 
   // 收到的每包数据, 与 205 的协议规定, 振动数据不超过 320 包
   // list 中 index 对应收到的包的编号
-  private val waveData: MutableList<ByteArray?> = MutableList(320) { null }
+  private val waveData: MutableList<ByteArray?> = MutableList(MAX_CHUNK_COUNT) { null }
 
   // 回复下位机收包结果, 40 * 8bit, 总共 320 bit, 对应最多 320 包的收包情况.
   // 当收到包后, 将该包对应的 位 置 1
-  private val response = ByteArray(40)
+  private val response = ByteArray(MAX_CHUNK_COUNT / 8)
 
   /**
    * ok
@@ -263,7 +267,9 @@ object RH205Mgr : ABleMgr() {
                   return
                 }
               }
-              totalBagCount = ByteUtil.getIntFromByteArray(data, 4)
+              // TODO 下位机给的总包数不对
+              // totalBagCount = ByteUtil.getIntFromByteArray(data, 4)
+              totalBagCount = (dataLength.toFloat() / CHUNK_LEN).roundToInt()
               var isEnd = true
               for (i in 0 until totalBagCount) {
                 if (waveData[i] != null) {
@@ -744,7 +750,7 @@ object RH205Mgr : ABleMgr() {
     dTag("upgrade_crc_hex", crcStr)
 
     val totalBagCount =
-      length.toBigDecimal().divide(DATA_LEN.toBigDecimal(), 0, BigDecimal.ROUND_UP).toInt()
+      length.toBigDecimal().divide(CHUNK_LEN.toBigDecimal(), 0, BigDecimal.ROUND_UP).toInt()
     if (totalBagCount < 1) {
       mainHandler.post { callback.onUpgradeResult(false, "升级文件出错, 请重新下载升级文件") }
       return
@@ -773,7 +779,7 @@ object RH205Mgr : ABleMgr() {
         dTag("upgrade_index", _bagIndex.toString())
         val bagIndexB = ByteUtil.intToBytes(_bagIndex)
         val upgradeBag: ByteArray = Arrays.copyOfRange(
-          bytesUpgrade, _bagIndex * DATA_LEN, (_bagIndex + 1) * DATA_LEN
+          bytesUpgrade, _bagIndex * CHUNK_LEN, (_bagIndex + 1) * CHUNK_LEN
         )
         val upgradeDataOrigin = Arrays.copyOf(bagIndexB, bagIndexB.size + upgradeBag.size)
         System.arraycopy(upgradeBag, 0, upgradeDataOrigin, 4, upgradeBag.size)
