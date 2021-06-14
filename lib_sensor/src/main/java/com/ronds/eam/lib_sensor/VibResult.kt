@@ -219,7 +219,7 @@ class VibResult private constructor(private val builder: Builder) {
     var data: List<Short> = listOf()
 
     // 加速度系数
-    var accCoe: Float = 0.97f
+    var accCoe: Float = 0f
 
     // 0 - 加速度, 1 - 速度, 2 - 位移
     var signalType: Int = 0
@@ -239,10 +239,10 @@ class VibResult private constructor(private val builder: Builder) {
     var freq: Float = 2.56f * 1000
 
     // 下限频率, hz
-    var freqLower: Float = 0.1f
+    var freqLower: Float = freq
 
     // 上限频率, hz
-    var freqUpper: Float = 40000f
+    var freqUpper: Float = freq * 2
 
     // 采集长度, 多少个点. 1 个点为 2 个 byte(short).
     var len: Int = 1 * 1024
