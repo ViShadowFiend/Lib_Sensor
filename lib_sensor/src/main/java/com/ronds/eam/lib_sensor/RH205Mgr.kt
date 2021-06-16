@@ -42,12 +42,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 
-// 波形数据传输或者升级文件传输时, 每包有效数最大长度
-private const val CHUNK_LEN = 232
-// 波形数据传输或者升级文件传输最大包数
-private const val MAX_CHUNK_COUNT = 320
-
 object RH205Mgr : ABleMgr() {
+  // 波形数据传输或者升级文件传输时, 每包有效数最大长度
+  private const val CHUNK_LEN = 232
+  // 波形数据传输或者升级文件传输最大包数
+  private const val MAX_CHUNK_COUNT = 320
+
+  // 分析频率转为采样频率的系数
+  // RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
+  // 一般情况. 采样频率 = 分析频率 * 2.56.
+  const val FREQ_COE = 2.50f
 
   override val TIP_DISCONNECT: String
     get() = "当前未与205连接, 请连接205后重试"
@@ -164,9 +168,7 @@ object RH205Mgr : ABleMgr() {
     // 分析频率, 单位 Hz
     val fenXiPinLv = params.freq * 100
     // 采样频率, 单位 hz
-    // 一般情况. 采样频率 = 分析频率 * 2.56.
-    // RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
-    val caiYangPinLv = fenXiPinLv * 2.5
+    val caiYangPinLv = fenXiPinLv * FREQ_COE
     // 采集时间. 单位 ms.
     // 频率为每秒振动多少下. 振动一下即有一个点的数据. 频率为多少, 即每秒有采集多少个点的数据
     val collectTime = (caiJiChangDu.toDouble() / caiYangPinLv * 1000.0).toLong()
@@ -707,7 +709,7 @@ object RH205Mgr : ABleMgr() {
       val len = encoder.len // 单位 K
       val freq = encoder.freq // 单位 100Hz
       // 校准需要的时间(s)为 长度(K) * 1024 / 频率(HZ) / 2.56, 预留 1000 ms
-      val timeout = len * 1024 / (freq * 100) / 2.56 * 1000 + 1000
+      val timeout = len * 1024 / (freq * 100) / FREQ_COE * 1000 + 1000
       val action = {
         val data = encoder.encode()
         dTag("calibration_data", data)

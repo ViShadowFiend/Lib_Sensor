@@ -13,7 +13,7 @@ data class SampleParamsAdapter(
   var len: Short = 0,
   // 分析频率, 单位 100hz, 5, 10, 20, 50, 100, 200,
   var freq: Short = 0,
-  // 轴向, 0 - z, 1 - x, 2 -y, 4 - 采集温度
+  // 轴向, 0 - z, 1 - x, 2 -y, 3 - 采集温度
   var axis: Byte = 0,
   // 测温发射率
   var tempEmi: Float = 0.97f,

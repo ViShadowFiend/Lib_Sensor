@@ -3,6 +3,7 @@ package com.ronds.eam.lib_sensor
 import com.ronds.eam.lib_sensor.utils.MathUtil
 import com.ronds.eambletoolkit.Spectrum
 import com.ronds.eambletoolkit.VibDataProcessUtil
+import java.util.Arrays
 
 class VibResult private constructor(private val builder: Builder) {
 
@@ -85,7 +86,11 @@ class VibResult private constructor(private val builder: Builder) {
     VibDataProcessUtil.fft(spectrum, this, freq.toDouble())
     var r = spectrum.amplitude
     // val df = freqUpper * 1.28 / (size - 1)
-    r = r.copyOfRange(0, ((size - 1) / 1.28).toInt())
+    // val range = freqUpper / df
+
+    // kotlin 的这个 copyOfRange 不会取两个 arr 的最小 len, 会直接 IndexOutOfBoundsException
+    // r = r.copyOfRange(0, ((size - 1) / 1.28).toInt())
+    r = Arrays.copyOfRange(r, 0, ((size - 1) / 1.28).toInt())
     return r
   }
 
@@ -122,8 +127,8 @@ class VibResult private constructor(private val builder: Builder) {
     waveData = with(builder) {
       val d: DoubleArray = data.avg(accCoe)
       when (signalType) {
-        1 -> d.toVel(freq, freqLower, freqUpper)
-        2 -> d.toDist(freq, freqLower, freqUpper)
+        1 -> d.toVel(freqSample, freqLower, getFreqUpper())
+        2 -> d.toDist(freqSample, freqLower, getFreqUpper())
         else -> d
       }
     }
@@ -135,7 +140,7 @@ class VibResult private constructor(private val builder: Builder) {
     if (spectrumData.isNotEmpty()) {
       return spectrumData
     }
-    spectrumData = waveData.toSpectrum(builder.freq)
+    spectrumData = waveData.toSpectrum(builder.freqSample)
     return spectrumData
   }
 
@@ -158,10 +163,10 @@ class VibResult private constructor(private val builder: Builder) {
         return if (size <= 1) {
           1.0
         } else {
-          builder.freq / 2 / (data().size - 1).toDouble()
+          builder.freqSample / 2 / (data().size - 1).toDouble()
         }
       }
-      else -> 1000.0 / builder.freq
+      else -> 1000.0 / builder.freqSample
     }
   }
 
@@ -171,7 +176,7 @@ class VibResult private constructor(private val builder: Builder) {
   fun xMax(): Double {
     return when(builder.samplingMode) {
       1 -> (data().size - 1) * dx()
-      else -> (builder.len) / (builder.freq) * 1000.0
+      else -> (builder.len) / (builder.freqSample) * 1000.0
     }
   }
 
@@ -230,19 +235,49 @@ class VibResult private constructor(private val builder: Builder) {
     // 0 - 有效值, 1 - 峰值, 2 - 峰峰值, 3 - 峭度值
     var paraType: Int = 0
 
+    // 分析频率
+    var freqAnalysis: Float = 1000f
+
     // 采样频率, hz
     // 采样频率 = 分析频率 * 2.56.
     //
     // 下发给下位机的是分析频率.
     // iEAM(RH517) 把上限频率当作分析频率下发, 逻辑中采样频率为 上限频率 * 2.56.
     // RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
-    var freq: Float = 2.56f * 1000
+    internal val freqSample: Float
+      get() = freqAnalysis * RH205Mgr.FREQ_COE
 
     // 下限频率, hz
-    var freqLower: Float = freq
+    var freqLower: Float = 10f
+      set(value) {
+        field = if (value < 10f) 10f else value
+      }
+      get() {
+        if (field < 10f) {
+          return 10f
+        }
+        return field
+      }
 
     // 上限频率, hz
-    var freqUpper: Float = freq * 2
+    private var _freqUpper: Float? = null
+
+    fun getFreqUpper(): Float {
+      return _freqUpper ?: freqAnalysis
+    }
+
+    fun setFreqUpper(f: Float) {
+      _freqUpper = f
+    }
+
+    // var freqUpper: Float = freq / COE
+    //   get() {
+    //     return _freqUpper ?: freq / COE
+    //   }
+    //   set(value) {
+    //     _freqUpper = value
+    //     field = value
+    //   }
 
     // 采集长度, 多少个点. 1 个点为 2 个 byte(short).
     var len: Int = 1 * 1024
