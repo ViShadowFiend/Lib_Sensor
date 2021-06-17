@@ -1,5 +1,6 @@
 package com.ronds.eam.lib_sensor
 
+import com.ronds.eam.lib_sensor.utils.ByteUtil
 import com.ronds.eam.lib_sensor.utils.MathUtil
 import com.ronds.eambletoolkit.Spectrum
 import com.ronds.eambletoolkit.VibDataProcessUtil
@@ -8,11 +9,20 @@ import java.util.Arrays
 class VibResult private constructor(private val builder: Builder) {
 
   /**
+   * 第 1 步:
+   * 原始数据转为 shortArray
+   */
+  private fun ByteArray.toShortArray(): ShortArray {
+    return ByteUtil.bytesToShorts(this)
+  }
+
+  /**
+   * 第 2 步:
    * 去平均
    *
    * @param accCoe 加速度系数
    */
-  private fun List<Short>.avg(accCoe: Float): DoubleArray {
+  private fun ShortArray.avg(accCoe: Float): DoubleArray {
     if (isEmpty()) {
       return doubleArrayOf()
     }
@@ -125,7 +135,7 @@ class VibResult private constructor(private val builder: Builder) {
       return waveData
     }
     waveData = with(builder) {
-      val d: DoubleArray = data.avg(accCoe)
+      val d: DoubleArray = data.toShortArray().avg(accCoe)
       when (signalType) {
         1 -> d.toVel(freqSample, freqLower, getFreqUpper())
         2 -> d.toDist(freqSample, freqLower, getFreqUpper())
@@ -206,7 +216,7 @@ class VibResult private constructor(private val builder: Builder) {
   }
 
   /**
-   * 需上传给服务器的格式, 经过一定的变换, 用来保存为本地文件
+   * 需上传给 eam 服务器的格式, 经过一定的变换, 用来保存为本地文件
    */
   fun savedBytes(): ByteArray {
     return data().toSavedBytes()
@@ -221,7 +231,7 @@ class VibResult private constructor(private val builder: Builder) {
 
   class Builder {
     // 原始数据
-    var data: List<Short> = listOf()
+    lateinit var data: ByteArray
 
     // 加速度系数
     var accCoe: Float = 0f

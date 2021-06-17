@@ -270,7 +270,7 @@ object RH205Mgr : ABleMgr() {
                 }
               }
               // TODO 下位机给的总包数不对
-              // totalBagCount = ByteUtil.getIntFromByteArray(data, 4)
+              val totalBagCountTest = ByteUtil.getIntFromByteArray(data, 4)
               totalBagCount = (dataLength.toFloat() / CHUNK_LEN).roundToInt()
               var isEnd = true
               for (i in 0 until totalBagCount) {
@@ -287,10 +287,12 @@ object RH205Mgr : ABleMgr() {
                 for (i in 0 until totalBagCount) {
                   waveData[i]!!.forEach { bytes.add(it) }
                 }
+                val testLen = bytes.size
                 // RH205 最后一包有填充了 0x00 的无效数据, 根据 dataLen 截掉小尾巴
-                val bytesArr = bytes.toByteArray().copyOfRange(0, dataLength)
-                val shorts: ShortArray = ByteUtil.bytesToShorts(bytesArr)
-                callback.onReceiveVibData(shorts)
+                val bytesArr = Arrays.copyOfRange(bytes.toByteArray(), 0, dataLength)
+                val testLenClip = bytesArr.size
+                onLog?.invoke("波形测试: 包数=${totalBagCountTest}, len=${testLen}->${testLenClip}")
+                callback.onReceiveVibData(bytesArr)
                 val res = response.pack(HEAD_TO_SENSOR, CMD_WAVE_DATA_RESULT)
                 doSleep(50)
                 write(res)

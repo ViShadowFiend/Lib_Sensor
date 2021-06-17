@@ -165,7 +165,7 @@ interface SampleResultCallback : OnFailCallback {
   /**
    * 之后会回调波形数据
    */
-  fun onReceiveVibData(vibData: ShortArray?)
+  fun onReceiveVibData(vibData: ByteArray)
 }
 
 /**
