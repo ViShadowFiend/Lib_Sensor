@@ -40,7 +40,6 @@ import java.util.Arrays
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.roundToInt
 
 object RH205Mgr : ABleMgr() {
   // 波形数据传输或者升级文件传输时, 每包有效数最大长度
@@ -175,7 +174,7 @@ object RH205Mgr : ABleMgr() {
     // 回传时间. 单位 ms.
     // * 2 因为每个点(short) 2个字节, / 4 是预估传输速度为 4b/ms
     // 预留 10 * 1000 ms. 因为 RH205 时常超时
-    val transferTime = (caiJiChangDu * 2.0 / 4).toLong() + 10000
+    val transferTime = (caiJiChangDu * 2.0 / 4).toLong() + caiJiChangDu * 10
     // 采样数据长度. 即有多少个字节的数据
     val dataLength = caiJiChangDu * 2
 
@@ -197,6 +196,10 @@ object RH205Mgr : ABleMgr() {
     release()
     doSleep(100)
 
+    var testTime: Long = System.currentTimeMillis()
+    var testIndex: Int = 0
+    var testTotalBagCount: Int = (dataLength.toFloat() / CHUNK_LEN).toInt()
+
     BleManager.getInstance()
       .notify(curBleDevice, UUID_SERVICE, UUID_UP, object : BleNotifyCallback() {
         override fun onCharacteristicChanged(data: ByteArray?) {
@@ -204,7 +207,10 @@ object RH205Mgr : ABleMgr() {
           if (data == null || data.size < 5 || data[0] != HEAD_FROM_SENSOR) {
             return
           }
-          Log.d("收到: ", "${ByteUtil.parseByte2HexStr(byteArrayOf(data[1]))} ${System.currentTimeMillis()}")
+          Log.d(
+            "收到: ",
+            "${ByteUtil.parseByte2HexStr(byteArrayOf(data[1]))} ${System.currentTimeMillis()}"
+          )
           when (data[1]) {
             CMD_SAMPLING_PARAMS -> { // 收到下达测振的回复
               dTag("notify_sample", data)
@@ -247,6 +253,11 @@ object RH205Mgr : ABleMgr() {
             }
             CMD_DATA_DETAIL -> { // 收到测振数据
               isReceivedWaveData.set(true)
+              Log.d(
+                "收到包号",
+                "${testIndex++}/${testTotalBagCount}, ${System.currentTimeMillis() - testTime}"
+              )
+              testTime = System.currentTimeMillis()
               if (isTimeoutWaveData.get()) {
                 return
               }
@@ -258,20 +269,15 @@ object RH205Mgr : ABleMgr() {
               if (data.size != 9) {
                 return
               }
-              if (isReceivedResultFirst.get()) {
-                isReceivedResultOthers.set(true)
-                if (isTimeoutResultOthers.get()) {
-                  return
-                }
-              } else {
-                isReceivedResultFirst.set(true)
-                if (isTimeoutResultFirst.get()) {
-                  return
-                }
+              isReceivedResultFirst.set(true)
+              if (isTimeoutResultFirst.get()) {
+                return
               }
-              // TODO 下位机给的总包数不对
-              val totalBagCountTest = ByteUtil.getIntFromByteArray(data, 4)
-              totalBagCount = (dataLength.toFloat() / CHUNK_LEN).roundToInt()
+              isReceivedResultOthers.set(true)
+              if (isTimeoutResultOthers.get()) {
+                return
+              }
+              totalBagCount = ByteUtil.getIntFromByteArray(data, 4)
               var isEnd = true
               for (i in 0 until totalBagCount) {
                 if (waveData[i] != null) {
@@ -291,7 +297,7 @@ object RH205Mgr : ABleMgr() {
                 // RH205 最后一包有填充了 0x00 的无效数据, 根据 dataLen 截掉小尾巴
                 val bytesArr = Arrays.copyOfRange(bytes.toByteArray(), 0, dataLength)
                 val testLenClip = bytesArr.size
-                onLog?.invoke("波形测试: 包数=${totalBagCountTest}, len=${testLen}->${testLenClip}")
+                onLog?.invoke("波形测试: 包数=${totalBagCount}, len=${testLen}->${testLenClip}")
                 callback.onReceiveVibData(bytesArr)
                 val res = response.pack(HEAD_TO_SENSOR, CMD_WAVE_DATA_RESULT)
                 doSleep(50)
