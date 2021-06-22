@@ -77,6 +77,12 @@ public class ByteUtil {
     return bytes;
   }
 
+  public static byte[] intToBytesTest(int n) {
+    final byte[] bytes = new byte[4];
+    ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).putInt(n);
+    return bytes;
+  }
+
   public static int bytesToInt(byte[] b) {
     if (b == null) return 0;
     return ByteBuffer.wrap(b).order(byteOrder).getInt();
@@ -108,14 +114,14 @@ public class ByteUtil {
     int temp;
     int j;
 
-    crc = 0xFFFFFFFF;//
+    crc = 0xFFFFFFFF;
 
     for (int i = 0; i < data.length; i++) {
       temp = ((crc & 0xFF) ^ data[i]);
       for (j = 0; j < 8; j++) {
         int status = temp & 0x1;
-        if (status != 0) {
-          temp = (temp >> 1) ^ 0xEDB88320;
+        if (status > 0) {
+          temp = (temp >> 1) ^ 0x04C11DB7;
         } else {
           temp >>= 1;
         }

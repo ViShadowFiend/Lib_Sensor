@@ -515,7 +515,8 @@ abstract class ABleMgr {
 
   protected fun dTag(tag: String?, log: Any?) {
     if (isDebug && log != null) {
-      Log.d("${TAG}_$tag", log.toString())
+      // Log.d("${TAG}_$tag", log.toString())
+      println("${tag}_${log}")
     }
   }
 
