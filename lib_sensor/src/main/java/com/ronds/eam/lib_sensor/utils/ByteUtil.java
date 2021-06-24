@@ -110,25 +110,49 @@ public class ByteUtil {
    * CRC校验
    */
   public static int computeCRC32(byte[] data) {
-    int crc;
+    // 1
+    //CRC32 crc32 = new CRC32();
+    //crc32.update(data);
+    //return (int)(crc32.getValue());
+
+    // 2
+    //long crc = 0x0FFFFFFFFL;
+    //if (data == null) {
+    //  return (int) (crc & 0x0FFFFFFFFL);
+    //}
+    //long temp;
+    //for (byte b : data) {
+    //  temp = (crc & 0x0FFL) ^ (b & 0x0FFL);
+    //  for (byte j = 0; j < 8; j++) {
+    //    long status = temp & 0x01L;
+    //    if (status != 0) {
+    //      temp = temp >>> 1 ^ 0x0EDB88320L;
+    //    } else {
+    //      temp >>>= 1;
+    //    }
+    //  }
+    //  crc = crc >>> 8 ^ temp;
+    //}
+    //return (int) ((crc ^ 0x0FFFFFFFFL) & 0x0FFFFFFFFL);
+
+    // 3
+    int crc = 0xFFFFFFFF;
+    if (data == null) {
+      return crc;
+    }
     int temp;
-    int j;
-
-    crc = 0xFFFFFFFF;
-
-    for (int i = 0; i < data.length; i++) {
-      temp = ((crc & 0xFF) ^ data[i]);
-      for (j = 0; j < 8; j++) {
-        int status = temp & 0x1;
-        if (status > 0) {
-          temp = (temp >> 1) ^ 0x04C11DB7;
+    for (byte b : data) {
+      temp = (crc & 0x0FF) ^ (b & 0x0FF);
+      for (byte j = 0; j < 8; j++) {
+        if ((temp & 1) != 0) {
+          temp = temp >>> 1 ^ 0xEDB88320;
         } else {
-          temp >>= 1;
+          temp >>>= 1;
         }
       }
-      crc = (crc >> 8) ^ temp;
+      crc = crc >>> 8 ^ temp;
     }
-    return crc ^ 0xFFFFFFFF;
+    return ~crc;
   }
 
   public static String byteToBit(byte b) {
