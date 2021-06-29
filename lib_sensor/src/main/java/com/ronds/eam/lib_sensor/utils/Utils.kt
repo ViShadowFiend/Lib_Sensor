@@ -57,6 +57,15 @@ object Utils {
   }
 }
 
+internal fun ByteArray.toHex(
+  separator: CharSequence = "",
+  prefix: CharSequence = "",
+  postfix: CharSequence = "",
+  limit: Int = -1,
+  truncated: CharSequence = "...",
+  transform: ((Byte) -> CharSequence)? = { String.format("%02X", (it.toInt() and 0xFF)) }
+) = joinToString(separator, prefix, postfix, limit, truncated, transform)
+
 internal fun ByteArray.getString(index: Int, len: Int) = String(
   this.copyOfRange(index, index + len)
 )

@@ -35,6 +35,7 @@ import com.ronds.eam.lib_sensor.utils.CRC
 import com.ronds.eam.lib_sensor.utils.getInt
 import com.ronds.eam.lib_sensor.utils.getShort
 import com.ronds.eam.lib_sensor.utils.pack
+import com.ronds.eam.lib_sensor.utils.toHex
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.Arrays
@@ -128,7 +129,8 @@ object RH205Mgr : ABleMgr() {
     curFuture = singleExecutor.submit {
       doSleep(200)
       notify { data ->
-        dTag("notify_temp", data)
+        dTag("notify_temp", ByteUtil.parseByte2HexStr(data))
+        dTag("notify_temp1", data?.toHex())
         isReceivedTemp.set(true)
         if (!isTempProcessing.get()) return@notify
         if (isTimeoutTemp.get()) return@notify
@@ -777,8 +779,7 @@ object RH205Mgr : ABleMgr() {
     val response = byteArrayOf().pack(HEAD_TO_SENSOR, RH205Consts.CMD_UPGRADE_DATA_RESULT)
     val bagCountB: ByteArray = ByteUtil.intToBytes(totalBagCount)
     val dataOrigin = ByteArray(16)
-    // TODO
-    val transferInterval = 1000L // 每包的传输间隔
+    val transferInterval = 100L // 每包的传输间隔
     val maxRetryCount = 50 // 最大重传次数
     var mills = 0L // 用来计时用的
     val retryCount = AtomicInteger(0) // 用来统计重传次数的
@@ -871,40 +872,40 @@ object RH205Mgr : ABleMgr() {
 
     curFuture?.cancel(true)
     mainHandler.removeCallbacksAndMessages(null)
-    // curFuture = singleExecutor.submit {
-    //   notify { data ->
-    //     dTag("notify_prepare_upgrade", data?.toString())
-    //     isReceivedPrepare.set(true)
-    //     if (isTimeoutPrepare.get()) return@notify
-    //     if (data == null || data.size != 6 || data[4] != 0x01.toByte() || data[0] != HEAD_FROM_SENSOR || data[1] != RH205Consts.CMD_PREPARE_UPGRADE) {
-    //       mainHandler.post { callback.onUpgradeResult(false, "准备升级失败") }
-    //     } else {
-    //       singleExecutor.submit {
-    //         doSleep(200)
-    //         notifyResult()
-    //         doSleep(200)
-    //         mills = System.currentTimeMillis()
-    //         for (i in 0 until totalBagCount) {
-    //           doSleep(transferInterval)
-    //           upgradeData(i)
-    //         }
-    //         doRetry(200, { write(response) }, 0, 2, 1000, isReceivedResult, isTimeoutResult) {
-    //           mainHandler.post {
-    //             callback.onUpgradeResult(false, "请求结果0超时, 升级失败")
-    //             mainHandler.removeCallbacksAndMessages(null)
-    //             BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
-    //           }
-    //         }
-    //       }
-    //     }
-    //   }
-    //   doRetry(200, { write(dataPrepare) }, 0, 2, 5000, isReceivedPrepare, isTimeoutPrepare) {
-    //     mainHandler.post {
-    //       callback.onUpgradeResult(false, "升级失败, 超时")
-    //       mainHandler.removeCallbacksAndMessages(null)
-    //       BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
-    //     }
-    //   }
-    // }
+    curFuture = singleExecutor.submit {
+      notify { data ->
+        dTag("notify_prepare_upgrade", data?.toString())
+        isReceivedPrepare.set(true)
+        if (isTimeoutPrepare.get()) return@notify
+        if (data == null || data.size != 6 || data[4] != 0x01.toByte() || data[0] != HEAD_FROM_SENSOR || data[1] != RH205Consts.CMD_PREPARE_UPGRADE) {
+          mainHandler.post { callback.onUpgradeResult(false, "准备升级失败") }
+        } else {
+          singleExecutor.submit {
+            doSleep(200)
+            notifyResult()
+            doSleep(200)
+            mills = System.currentTimeMillis()
+            for (i in 0 until totalBagCount) {
+              doSleep(transferInterval)
+              upgradeData(i)
+            }
+            doRetry(200, { write(response) }, 0, 2, 1000, isReceivedResult, isTimeoutResult) {
+              mainHandler.post {
+                callback.onUpgradeResult(false, "请求结果0超时, 升级失败")
+                mainHandler.removeCallbacksAndMessages(null)
+                BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
+              }
+            }
+          }
+        }
+      }
+      doRetry(200, { write(dataPrepare) }, 0, 2, 5000, isReceivedPrepare, isTimeoutPrepare) {
+        mainHandler.post {
+          callback.onUpgradeResult(false, "升级失败, 超时")
+          mainHandler.removeCallbacksAndMessages(null)
+          BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
+        }
+      }
+    }
   }
 }
