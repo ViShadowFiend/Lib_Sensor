@@ -177,8 +177,11 @@ interface UpgradeCallback {
    *
    * @param success true - 升级成功, false - 升级失败
    * @param msg 升级成功或失败后的回调信息
+   * @param time 升级耗时
    */
-  fun onUpgradeResult(success: Boolean, msg: String?)
+  fun onUpgradeResult(success: Boolean, msg: String?, time: Long?)
+
+  fun onProgress(complete: Int, total: Int, speed: Float)
 }
 
 interface GetDataListResultCallback : ResultCallback<GetDataListResult>, OnFailCallback

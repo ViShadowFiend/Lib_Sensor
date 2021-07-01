@@ -740,13 +740,13 @@ object RH205Mgr : ABleMgr() {
    * @param sn sn 号
    * @param byteArray 升级数据
    */
-  fun upgrade(sn: Int, byteArray: ByteArray?, callback: UpgradeCallback) {
+  fun upgrade(sn: Int, transferInterval: Long = 200L, byteArray: ByteArray?, callback: UpgradeCallback) {
     if (!isConnected()) {
-      callback.onUpgradeResult(false, TIP_DISCONNECT)
+      callback.onUpgradeResult(false, TIP_DISCONNECT, null)
       return
     }
     if (byteArray == null) {
-      callback.onUpgradeResult(false, "升级文件不存在, 请重新下载升级文件")
+      callback.onUpgradeResult(false, "升级文件不存在, 请重新下载升级文件", null)
       return
     }
     val isTimeoutPrepare = AtomicBoolean(false)
@@ -773,15 +773,18 @@ object RH205Mgr : ABleMgr() {
     val totalBagCount =
       length.toBigDecimal().divide(CHUNK_LEN.toBigDecimal(), 0, BigDecimal.ROUND_UP).toInt()
     if (totalBagCount < 1) {
-      mainHandler.post { callback.onUpgradeResult(false, "升级文件出错, 请重新下载升级文件") }
+      mainHandler.post { callback.onUpgradeResult(false, "升级文件出错, 请重新下载升级文件", null) }
       return
+    }
+    var lastBagLen = length % CHUNK_LEN
+    if (lastBagLen == 0) {
+      lastBagLen = CHUNK_LEN
     }
     val response = byteArrayOf().pack(HEAD_TO_SENSOR, RH205Consts.CMD_UPGRADE_DATA_RESULT)
     val bagCountB: ByteArray = ByteUtil.intToBytes(totalBagCount)
     val dataOrigin = ByteArray(16)
-    val transferInterval = 100L // 每包的传输间隔
     val maxRetryCount = 50 // 最大重传次数
-    var mills = 0L // 用来计时用的
+    var time = 0L // 用来计时用的
     val retryCount = AtomicInteger(0) // 用来统计重传次数的
     System.arraycopy(snB, 0, dataOrigin, 0, 4)
     System.arraycopy(lengthB, 0, dataOrigin, 4, 4)
@@ -789,12 +792,17 @@ object RH205Mgr : ABleMgr() {
     System.arraycopy(bagCountB, 0, dataOrigin, 12, 4)
     val dataPrepare = dataOrigin.pack(HEAD_TO_SENSOR, RH205Consts.CMD_PREPARE_UPGRADE)
 
+    // 进度和速率
+    val completeCount = AtomicInteger(0)
+    var mills = 0L
+
     /**
      * 传送升级文件
      */
     fun upgradeData(_bagIndex: Int) {
       mainHandler.post {
-        if (mills == 0L) {
+        if (time == 0L) {
+          time = System.currentTimeMillis()
           mills = System.currentTimeMillis()
         }
         dTag("upgrade_index", _bagIndex.toString())
@@ -810,6 +818,21 @@ object RH205Mgr : ABleMgr() {
         dTag("upgradeX", "start send $_bagIndex")
         write(upgradeData, object : BleWriteCallback() {
           override fun onWriteSuccess(current: Int, total: Int, justWrite: ByteArray?) {
+            val complete = completeCount.incrementAndGet()
+            // b/ms , kb/s
+            val speed = if (complete < totalBagCount) {
+              CHUNK_LEN.toBigDecimal()
+                .divide((System.currentTimeMillis() - mills).toBigDecimal(), 2, BigDecimal.ROUND_UP)
+                .toFloat()
+            } else if(complete == totalBagCount) (
+              lastBagLen.toBigDecimal()
+                .divide((System.currentTimeMillis() - mills).toBigDecimal(), 2, BigDecimal.ROUND_UP)
+                .toFloat()
+            ) else {
+              0f
+            }
+            mills = System.currentTimeMillis()
+            callback.onProgress(complete, totalBagCount, speed)
             dTag("upgradeX", "send $_bagIndex success")
           }
 
@@ -835,7 +858,7 @@ object RH205Mgr : ABleMgr() {
               dTag("升级重试", "第${retryCount.get()}次")
               if (retryCount.get() > maxRetryCount) {
                 mainHandler.post {
-                  callback.onUpgradeResult(false, "升级失败, 请重试")
+                  callback.onUpgradeResult(false, "升级失败, 请重试", null)
                   mainHandler.removeCallbacksAndMessages(null)
                   BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
                 }
@@ -848,21 +871,21 @@ object RH205Mgr : ABleMgr() {
               }
               doRetry(200, { write(response) }, 0, 2, 5000, isReceivedResult, isTimeoutResult) {
                 mainHandler.post {
-                  callback.onUpgradeResult(false, "请求结果1超时, 升级失败")
+                  callback.onUpgradeResult(false, "请求结果1超时, 升级失败", null)
                   mainHandler.removeCallbacksAndMessages(null)
                   BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
                 }
               }
             }
           } else {
-            val time = System.currentTimeMillis() - mills
+            val time = System.currentTimeMillis() - time
             dTag("升级耗时", (time / 1000).toString())
-            mainHandler.post { callback.onUpgradeResult(true, "升级成功") }
+            mainHandler.post { callback.onUpgradeResult(true, "升级成功", time) }
           }
         } else {
           dTag("upgradeResult", "失败")
           mainHandler.post {
-            callback.onUpgradeResult(false, "升级失败, 返回格式有误")
+            callback.onUpgradeResult(false, "升级失败, 返回格式有误", null)
             mainHandler.removeCallbacksAndMessages(null)
             BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
           }
@@ -878,20 +901,20 @@ object RH205Mgr : ABleMgr() {
         isReceivedPrepare.set(true)
         if (isTimeoutPrepare.get()) return@notify
         if (data == null || data.size != 6 || data[4] != 0x01.toByte() || data[0] != HEAD_FROM_SENSOR || data[1] != RH205Consts.CMD_PREPARE_UPGRADE) {
-          mainHandler.post { callback.onUpgradeResult(false, "准备升级失败") }
+          mainHandler.post { callback.onUpgradeResult(false, "准备升级失败", null) }
         } else {
           singleExecutor.submit {
             doSleep(200)
             notifyResult()
             doSleep(200)
-            mills = System.currentTimeMillis()
+            time = System.currentTimeMillis()
             for (i in 0 until totalBagCount) {
               doSleep(transferInterval)
               upgradeData(i)
             }
             doRetry(200, { write(response) }, 0, 2, 1000, isReceivedResult, isTimeoutResult) {
               mainHandler.post {
-                callback.onUpgradeResult(false, "请求结果0超时, 升级失败")
+                callback.onUpgradeResult(false, "请求结果0超时, 升级失败", null)
                 mainHandler.removeCallbacksAndMessages(null)
                 BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
               }
@@ -901,7 +924,7 @@ object RH205Mgr : ABleMgr() {
       }
       doRetry(200, { write(dataPrepare) }, 0, 2, 5000, isReceivedPrepare, isTimeoutPrepare) {
         mainHandler.post {
-          callback.onUpgradeResult(false, "升级失败, 超时")
+          callback.onUpgradeResult(false, "升级失败, 超时", null)
           mainHandler.removeCallbacksAndMessages(null)
           BleManager.getInstance().removeNotifyCallback(curBleDevice, UUID_UP)
         }
