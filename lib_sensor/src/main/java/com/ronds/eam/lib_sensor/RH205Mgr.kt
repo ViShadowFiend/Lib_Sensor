@@ -686,7 +686,7 @@ object RH205Mgr : ABleMgr() {
         val data = byteArrayOf().pack(HEAD_TO_SENSOR, CMD_SELF_CHECK)
         dTag("self_check_send", data)
         write(data)
-      }, 200L, 2, 500, isReceived, isTimeout) {
+      }, 200L, 2, 2000, isReceived, isTimeout) {
         callback.onFail(TIP_TIMEOUT)
       }
     }
