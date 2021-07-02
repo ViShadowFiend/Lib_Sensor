@@ -137,8 +137,8 @@ class VibResult private constructor(private val builder: Builder) {
     waveData = with(builder) {
       val d: DoubleArray = data.toShortArray().avg(accCoe)
       when (signalType) {
-        1 -> d.toVel(freqSample, freqLower, getFreqUpper())
-        2 -> d.toDist(freqSample, freqLower, getFreqUpper())
+        1 -> d.toVel(freqSample, freqLower, freqUpper)
+        2 -> d.toDist(freqSample, freqLower, freqUpper)
         else -> d
       }
     }
@@ -229,7 +229,10 @@ class VibResult private constructor(private val builder: Builder) {
     return data().convertCoe()
   }
 
-  class Builder {
+  /**
+   * @param freqCoe 分析频率转采样频率的系数. 一般为 2.56, RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
+   */
+  class Builder(val freqCoe: Float = 2.56f) {
     // 原始数据
     lateinit var data: ByteArray
 
@@ -255,7 +258,7 @@ class VibResult private constructor(private val builder: Builder) {
     // iEAM(RH517) 把上限频率当作分析频率下发, 逻辑中采样频率为 上限频率 * 2.56.
     // RH205 因为硬件时钟的原因. 采样频率 = 分析频率 * 2.5
     internal val freqSample: Float
-      get() = freqAnalysis * RH205Mgr.FREQ_COE
+      get() = freqAnalysis * freqCoe
 
     // 下限频率, hz
     var freqLower: Float = 10f
@@ -271,23 +274,13 @@ class VibResult private constructor(private val builder: Builder) {
 
     // 上限频率, hz
     private var _freqUpper: Float? = null
-
-    fun getFreqUpper(): Float {
+    var freqUpper: Float
+    get() {
       return _freqUpper ?: freqAnalysis
     }
-
-    fun setFreqUpper(f: Float) {
-      _freqUpper = f
+    set(value) {
+      _freqUpper = value
     }
-
-    // var freqUpper: Float = freq / COE
-    //   get() {
-    //     return _freqUpper ?: freq / COE
-    //   }
-    //   set(value) {
-    //     _freqUpper = value
-    //     field = value
-    //   }
 
     // 采集长度, 多少个点. 1 个点为 2 个 byte(short).
     var len: Int = 1 * 1024
