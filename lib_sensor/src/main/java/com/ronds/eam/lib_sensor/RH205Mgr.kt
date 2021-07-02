@@ -161,7 +161,11 @@ object RH205Mgr : ABleMgr() {
   /**
    * 测振
    */
-  fun sample(params: SampleParamsAdapter, callback: SampleResultCallback) {
+  fun sample(
+    params: SampleParamsAdapter,
+    onTimeListener: ((time: Long, speed: Float) -> Unit)? = null,
+    callback: SampleResultCallback
+  ) {
     if (!isConnected()) {
       callback.onFail(TIP_DISCONNECT)
       return
@@ -203,6 +207,10 @@ object RH205Mgr : ABleMgr() {
     var testTime: Long = System.currentTimeMillis()
     var testIndex: Int = 0
     var testTotalBagCount: Int = (dataLength.toFloat() / CHUNK_LEN).toInt()
+
+    // 用以计算传输耗时和传输速率
+    var firstChunk = true
+    var firstChunkMills = 0L
 
     BleManager.getInstance()
       .notify(curBleDevice, UUID_SERVICE, UUID_UP, object : BleNotifyCallback() {
@@ -261,6 +269,10 @@ object RH205Mgr : ABleMgr() {
                 "收到包号",
                 "${testIndex++}/${testTotalBagCount}, ${System.currentTimeMillis() - testTime}"
               )
+              if (firstChunk) {
+                firstChunk = false
+                firstChunkMills = System.currentTimeMillis()
+              }
               testTime = System.currentTimeMillis()
               if (isTimeoutWaveData.get()) {
                 return
@@ -303,6 +315,11 @@ object RH205Mgr : ABleMgr() {
                 val testLenClip = bytesArr.size
                 onLog?.invoke("波形测试: 包数=${totalBagCount}, len=${testLen}->${testLenClip}")
                 callback.onReceiveVibData(bytesArr)
+                // 传输耗时
+                val time = System.currentTimeMillis() - firstChunkMills
+                // 平均传输速率, b / ms, kb / s
+                val speed = dataLength.toFloat() / time
+                onTimeListener?.invoke(System.currentTimeMillis() - firstChunkMills, speed)
                 val res = response.pack(HEAD_TO_SENSOR, CMD_WAVE_DATA_RESULT)
                 doSleep(50)
                 write(res)
